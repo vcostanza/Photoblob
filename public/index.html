@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+
+	<head>
+		
+		<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+		<meta content="utf8" http-equiv="encoding">
+		
+		<link rel="icon" type="image/png" href="favicon.png">		
+		<link rel="stylesheet" type="text/css" href="theme.css">
+		
+		<script type="text/javascript" src="inheritance.js"></script>
+		
+		<title>Photoblob - A Blobware Project</title>
+		
+	</head>
+	
+	<body>
+	
+		<!-- Editing area -->
+		<div id="app-container" class="c">
+			
+			<div id="transparency">		
+				<canvas id="editor">
+					Your browser sucks. Get a better one.
+				</canvas>
+			</div>
+		
+		</div>
+		
+		<!-- Export image dialog -->
+		<div id="export-img" class="a" style="display:none" onclick="CloseImageExport()">
+			<img id="e-img" class="a">
+			<div id="e-load" class="a">Loading Image...</div>
+			<div id="e-msg" class="a">Right-click -> "Save Image As"</div>
+		</div>
+		
+		<!-- Client-side loader -->
+		<script type="text/javascript" src="funcs.js"></script>
+	
+	</body>
+	
+</html>
