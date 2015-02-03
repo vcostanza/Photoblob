@@ -1,3 +1,20 @@
+/* Photoblob Image/Texture Editor and 3D Model Viewer (http://photo.blob.software/)
+ * Copyright (C) 2015 Vincent Costanza
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 /*
 ** POP UP DIALOG BOXES
 */
@@ -24,6 +41,9 @@ PBOX_Base = Class.extend({
 		// Many windows have "Ok" and "Cancel" type buttons, so these are default
 		this.b_apply = new Button("Apply");
 		this.b_cancel = new Button("Cancel");
+		
+		// Children objects that are to be drawn are set here
+		this.setChildren(this.b_apply, this.b_cancel);
 	},
 	
 	// Default action which is called when the window is opened
@@ -72,6 +92,15 @@ PBOX_Base = Class.extend({
 			this.close();
 	},
 	
+	// Children objects are defined here
+	setChildren: function() {
+		if(!this.children) this.children = [];
+		
+		for(var i = 0; i < arguments.length; i++) {
+			this.children.push(arguments[i]);
+		}		
+	},
+	
 	// Draw window
 	draw: function(ctx) {
 		
@@ -89,7 +118,8 @@ PBOX_Base = Class.extend({
 			}
 		}
 		
-		RecurCall(this, "draw", ctx);
+		// Draw all child objects
+		RecurCall(this.children, "draw", ctx);
 	}
 });
 
@@ -102,6 +132,7 @@ PBOX_New = PBOX_Base.extend({
 		this.txt = [new TextBox(this, 80, 24, 128, 4, true, 1, 5000), new TextBox(this, 80, 24, 128, 4, true, 1, 5000)];
 		this.lbl = [new Label(80, 24, "Width:"), new Label(80, 24, "Height:")];
 		
+		this.setChildren(this.txt, this.lbl);
 	},
 	def: function() {
 	},
@@ -154,8 +185,10 @@ PBOX_ColorBox = PBOX_Base.extend({
 			new TextBox(this, 80, 24, "FFFFFF", 6, false)
 		];
 		
-		this.cpick = new ImageButton(Icons["Color Pick"], 25, 25);
+		this.cpick = new ImageButton(Icons["Color Pick"], 25, 25);		
 		this.picking = false;
+		
+		this.setChildren(this.cb, this.txt, this.cpick);
 		
 		this.recalc();
 	},
@@ -163,7 +196,10 @@ PBOX_ColorBox = PBOX_Base.extend({
 		if(defval) this.setRGBA(defval);
 		this._super();
 		this.callobj = obj;
-		this.callback = cb;		
+		this.callback = cb;
+		
+		// Don't draw the call object!
+		this.doNotDraw = [this.callobj];		
 	},
 	recalc: function(noBarUpdate, noTextUpdate) {
 		
@@ -171,19 +207,19 @@ PBOX_ColorBox = PBOX_Base.extend({
 		
 		this.cb[0].grad = [];
 		for(; i <= 10; i++) {
-			this.cb[0].grad[i] = HSL2RGB(i*0.1, 1, 0.5).concat([255]);	// Calculate hue gradient
+			this.cb[0].grad[i] = HSL2RGB(i*0.1, 1, 0.5).concat(255);	// Calculate hue gradient
 			if(!noBarUpdate && i < 3) this.cb[i].value = this.hsla[i];	// While we're here, update color box values
 		}
 		
 		if(!noBarUpdate) this.cb[3].value = this.hsla[3]/255;
 		
 		// Saturation gradient
-		this.cb[1].grad = [[128, 128, 128, 255], HSL2RGB(this.hsla[0], 1, 0.5).concat([255])];
+		this.cb[1].grad = [[128, 128, 128, 255], HSL2RGB(this.hsla[0], 1, 0.5).concat(255)];
 		
 		// Alpha gradient
-		this.cb[3].grad = [rgb.concat([0]), rgb.concat([255])];
+		this.cb[3].grad = [rgb.concat(0), rgb.concat(255)];
 		
-		this.rgba = rgb.concat([this.hsla[3]]);
+		this.rgba = rgb.concat(this.hsla[3]);
 		
 		if(!noTextUpdate) {
 			for(i = 0; i < 3; i++) {
@@ -193,7 +229,7 @@ PBOX_ColorBox = PBOX_Base.extend({
 		
 	},
 	setRGBA: function(rgb) {
-		this.hsla = RGB2HSL(rgb[0], rgb[1], rgb[2]).concat([rgb[3]]);
+		this.hsla = RGB2HSL(rgb[0], rgb[1], rgb[2]).concat(rgb[3]);
 		this.recalc();
 	},
 	def: function() {
@@ -203,14 +239,14 @@ PBOX_ColorBox = PBOX_Base.extend({
 		var parent = this;
 		for(var i = 0; i < 4; i++) {
 			this.txt[i].onchange = function(o, n) {
-				parent.hsla = RGB2HSL(parent.txt[0].get(), parent.txt[1].get(), parent.txt[2].get()).concat([parent.hsla[3]]);
+				parent.hsla = RGB2HSL(parent.txt[0].get(), parent.txt[1].get(), parent.txt[2].get()).concat(parent.hsla[3]);
 				parent.recalc(false, true);
 			};
 		}
 	},
 	apply: function() {
 		// Callback when we're done
-		if(this.callback) this.callback.call(this.callobj, HSL2RGB(this.hsla[0], this.hsla[1], this.hsla[2]).concat([this.hsla[3]]));
+		if(this.callback) this.callback.call(this.callobj, HSL2RGB(this.hsla[0], this.hsla[1], this.hsla[2]).concat(this.hsla[3]));
 	},
 	cancel: function() {
 		// Do nothing
@@ -292,9 +328,10 @@ PBOX_ColorBox = PBOX_Base.extend({
 PBOX_FontBox = PBOX_Base.extend({
 	init: function() {
 		this._super("Font Options", 200, 150);
+		this.name = new TextBox(80, 24, "Arial", false);
+		this.size = new TextBox(80, 24, 24, true);
+		this.setChildren(this.name, this.size);
 	},
-	name: new TextBox(80, 24, "Arial", false),
-	size: new TextBox(80, 24, 24, true),
 	def: function() {
 	},
 	detect: function(x, y, type) {		
@@ -306,8 +343,7 @@ PBOX_FontBox = PBOX_Base.extend({
 		// Text boxes
 		for(var i = 0; i < this.txt.length; i++) {
 			this.txt[i].detect(x, y, type);
-		}
-		
+		}		
 	},
 	draw: function(ctx) {
 		ctx.save();
@@ -325,10 +361,12 @@ PBOX_FontBox = PBOX_Base.extend({
 PBOX_Grayscale = PBOX_Base.extend({
 	init: function() {
 		this._super("Grayscale Image", 220, 310);
-	},
-	rb: [new RadioButton("Average"), new RadioButton("Darken"), new RadioButton("Lighten"), new RadioButton("Desaturate"),
+		this.rb = [new RadioButton("Average"), new RadioButton("Darken"), new RadioButton("Lighten"), new RadioButton("Desaturate"),
 		new RadioButton("Red Channel"), new RadioButton("Green Channel"), new RadioButton("Blue Channel"),
-		new RadioButton("Luma (SDTV)"), new RadioButton("Luma (HDTV)"), new RadioButton("Luma (UHDTV)")],
+		new RadioButton("Luma (SDTV)"), new RadioButton("Luma (HDTV)"), new RadioButton("Luma (UHDTV)")];
+		
+		this.setChildren(this.rb);
+	},
 	def: function() {
 		for(var e in this.rb) this.rb[e].toggle(false);
 		this.rb[0].toggle(true);
@@ -368,9 +406,12 @@ PBOX_Grayscale = PBOX_Base.extend({
 PBOX_Mirror = PBOX_Base.extend({
 	init: function() {
 		this._super("Mirror Image", 220, 110);
+		
+		this.hr = new CheckBox("Horizontal", 0);
+		this.vr = new CheckBox("Vertical", 1);
+		
+		this.setChildren(this.hr, this.vr);
 	},
-	hr: new CheckBox("Horizontal", 0),
-	vr: new CheckBox("Vertical", 1),
 	def: function() {
 		this.hr.toggle(false);
 		this.vr.toggle(false);
@@ -409,8 +450,10 @@ PBOX_Mirror = PBOX_Base.extend({
 PBOX_InvertColors = PBOX_Base.extend({
 	init: function() {
 		this._super("Invert Colors", 220, 150);
+		
+		this.cb = [new CheckBox("Red Channel"), new CheckBox("Green Channel"), new CheckBox("Blue Channel")];
+		this.setChildren(this.cb);
 	},
-	cb: [new CheckBox("Red Channel"), new CheckBox("Green Channel"), new CheckBox("Blue Channel")],
 	def: function() {
 		this.cb[0].toggle(true);
 		this.cb[1].toggle(true);
@@ -424,12 +467,14 @@ PBOX_InvertColors = PBOX_Base.extend({
 		
 		if(type == "click") {
 			
+			var changed = false;
+			
 			// Check boxes
 			for(var e in this.cb) {
-				this.cb[e].detect(x, y, type);
+				changed = (changed || this.cb[e].detect(x, y, type));
 			}
 			
-			IMGFX.InvertColors(this.cb[0].active, this.cb[1].active, this.cb[2].active);			
+			if(changed) IMGFX.InvertColors(this.cb[0].active, this.cb[1].active, this.cb[2].active);			
 		}
 		
 		this._super(x, y, type);
@@ -454,9 +499,12 @@ PBOX_Brightness = PBOX_Base.extend({
 	init: function() {
 		this._super("Brightness", 480, 170);
 		this.mode = 0;
+		
+		this.s = new Slider(400);
+		this.rb = [new RadioButton("Normal"), new RadioButton("Additive"), new RadioButton("Glow")];
+		
+		this.setChildren(this.s, this.rb);
 	},
-	s: new Slider(400),
-	rb: [new RadioButton("Normal"), new RadioButton("Additive"), new RadioButton("Glow")],
 	def: function() {
 		this.s.value = 128/400;
 		this.rb[this.mode].toggle(true);
@@ -510,9 +558,9 @@ PBOX_Brightness = PBOX_Base.extend({
 PBOX_AddNoise = PBOX_Base.extend({
 	init: function() {
 		this._super("Add Noise", 380, 100);
+		this.s = new Slider(300);
+		this.setChildren(this.s);
 	},
-	s: new Slider(300),
-	oldval: 0.0,
 	def: function() {
 		this.s.value = 0.2;
 		IMGFX.AddNoise(40);
@@ -550,8 +598,10 @@ PBOX_AddNoise = PBOX_Base.extend({
 PBOX_BoxBlur = PBOX_Base.extend({
 	init: function() {
 		this._super("Box Blur", 380, 100);
+		
+		this.s = new Slider(300);
+		this.setChildren(this.s);
 	},
-	s: new Slider(300),
 	def: function() {
 		this.s.value = 0.0;
 	},
@@ -588,13 +638,12 @@ PBOX_BoxBlur = PBOX_Base.extend({
 PBOX_Shift = PBOX_Base.extend({
 	init: function() {
 		this._super("Shift Image", 400, 120);
+		
+		this.sw = new Slider(300);
+		this.sh = new Slider(300);
+		this.setChildren(this.sw, this.sh);
 	},
-	sw: new Slider(300),
-	sh: new Slider(300),
-	oldw: 0.0,
-	oldh: 0.0,
 	def: function() {
-		this.active = true;
 		this.sw.value = 0.5;
 		this.sh.value = 0.5;
 		IMGFX.Shift();
@@ -604,15 +653,8 @@ PBOX_Shift = PBOX_Base.extend({
 	},
 	detect: function(x, y, type) {
 	
-		this.sw.detect(x, y, type);
-		this.sh.detect(x, y, type);
-		
 		// Slider
-		if(this.oldw != this.sw.value || this.oldh != this.sh.value) {
-			IMGFX.Shift(Math.round(this.sw.value*ImageArea.w), Math.round(this.sh.value*ImageArea.h));
-			this.oldw = this.sw.value;
-			this.oldh = this.sh.value;
-		}
+		if(this.sw.detect(x, y, type) || this.sh.detect(x, y, type)) IMGFX.Shift(Math.round(this.sw.value*ImageArea.w), Math.round(this.sh.value*ImageArea.h));
 		
 		this._super(x, y, type);
 		
@@ -642,9 +684,10 @@ PBOX_ChangeHSL = PBOX_Base.extend({
 		this.sh = new Slider(300);
 		this.ss = new Slider(300);
 		this.sl = new Slider(300);
+		
+		this.setChildren(this.sh, this.ss, this.sl);
 	},
 	def: function() {
-		this.active = true;
 		this.sh.value = 0.5;
 		this.ss.value = 0.5;
 		this.sl.value = 0.5;
@@ -652,17 +695,13 @@ PBOX_ChangeHSL = PBOX_Base.extend({
 	apply: function() {
 		IMGFX.AddHistory("Change HSL");
 	},
-	detect: function(x, y, type) {
-	
-		var ch1 = this.sh.detect(x, y, type), ch2 = this.ss.detect(x, y, type), ch3 = this.sl.detect(x, y, type);
-		
+	detect: function(x, y, type) {		
 		// Slider
-		if(ch1 || ch2 || ch3) {
+		if(this.sh.detect(x, y, type) || this.ss.detect(x, y, type) || this.sl.detect(x, y, type)) {
 			IMGFX.ChangeHSL(this.sh.value-0.5, (this.ss.value-0.5)*2, (this.sl.value-0.5)*2);
 		}
 		
-		this._super(x, y, type);
-		
+		this._super(x, y, type);		
 	},
 	draw: function(ctx) {
 		ctx.save();
@@ -691,12 +730,13 @@ PBOX_ReplaceColor = PBOX_Base.extend({
 		this.st = new Slider(300);
 		this.col_a = new ColorBox(40, 40, true);
 		this.col_b = new ColorBox(40, 40, true);
+		this.setChildren(this.st, this.col_a, this.col_b);
 	},
 	def: function() {
 		this.st.value = 0.0;
 		this.col_a.setColor(MainColors.bg);
 		this.col_b.setColor(MainColors.fg);
-		this.col_a.onChange = this.col_b.onChange = function() { PBOX.ReplaceColor.refresh(); };
+		this.col_a.onChange = this.col_b.onChange = function() { CL("ONCHANGE"); PBOX.ReplaceColor.refresh(); };
 	},
 	apply: function() {
 		IMGFX.AddHistory("Replace Color");
@@ -748,23 +788,24 @@ PBOX_ReplaceColor = PBOX_Base.extend({
 PBOX_ChooseTheme = PBOX_Base.extend({
 	init: function() {
 		this._super("Choose Theme", 250, 280, true);
-	},
-	last: 0,
-	rb: [new RadioButton("Default"), new RadioButton("Green"), new RadioButton("Red"), new RadioButton("Yellow"), new RadioButton("Cyan"),
+		
+		this.rb = [new RadioButton("Default"), new RadioButton("Green"), new RadioButton("Red"), new RadioButton("Yellow"), new RadioButton("Cyan"),
 		new RadioButton("Pink"), new RadioButton("Orange"), new RadioButton("Lime"), new RadioButton("Gray"), new RadioButton("Deep Blue"),
 		new RadioButton("Deep Green"), new RadioButton("Deep Red"), new RadioButton("Deep Yellow"), new RadioButton("Deep Cyan"),
-		new RadioButton("Deep Pink"), new RadioButton("Dela"), new RadioButton("High Contrast"), new RadioButton("Black")],
-	close: function(applied) {
-		if(PBOX.ChooseTheme.active) {
-			if(!applied) SetTheme(this.last);
-			else this.last = CurrentTheme;
-			PBOX.ChooseTheme.active = false;
-			Update();
-		}
+		new RadioButton("Deep Pink"), new RadioButton("Dela"), new RadioButton("High Contrast"), new RadioButton("Black")];
+		
+		this.setChildren(this.rb);
 	},
+	last: 0,
 	def: function() {
 		this.last = CurrentTheme;
 		this.rb[CurrentTheme].toggle(true);
+	},
+	apply: function() {
+		this.last = CurrentTheme;
+	},
+	cancel: function() {
+		SetTheme(this.last);
 	},
 	detect: function(x, y, type) {		
 		
@@ -800,7 +841,12 @@ PBOX_ChooseTheme = PBOX_Base.extend({
 PBOX_ImageBrowser = PBOX_Base.extend({
 	init: function() {
 		this._super("Images", 870, 530, true);
-		this.b_cancel = this.b_apply = null;
+		this.b_cancel = this.b_apply = null;		
+		this.b_next = new Button("Next");
+		this.b_prev = new Button("Previous");
+		this.rb = [new RadioButton("Difference", 1), new RadioButton("Size", 2), new RadioButton("", 3)];
+		
+		this.setChildren(this.b_next, this.b_prev, this.rb);		
 	},
 	images: [],	// Images array
 	hover: -1,	// Hovered image
@@ -808,9 +854,7 @@ PBOX_ImageBrowser = PBOX_Base.extend({
 	pages: 0,	// Total pages
 	tol: 2000,	// Total difference tolerance
 	tol_cutoff: 0,
-	b_next: new Button("Next"),
-	b_prev: new Button("Previous"),
-	rb: [new RadioButton("Difference", 1), new RadioButton("Size", 2), new RadioButton("", 3)],
+	
 	def: function() {
 		this.page = 0;
 		this.pages = CEIL(this.images.length/8);

@@ -1,8 +1,27 @@
+/* Photoblob Image/Texture Editor and 3D Model Viewer (http://photo.blob.software/)
+ * Copyright (C) 2015 Vincent Costanza
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 /* Objects */
 FileDialog = UploadForm = undefined;
 
 // Style
-F1 = C1 = C2 = C3 = BG1 = BG2 = BG3 = BG4 = BG4C = BG5 = BG6 = BG7 = BLK = GRY = "#000";
+F1 = C1 = C2 = C3 = BG1 = BG2 = BG3 = BG4 = BG4C = BG5 = BG6 = BG7 = WHT = "#FFF";
+BLK = "#000";
+GRY = "#666";
 CurrentTheme = 0;
 
 /* Drawing update vars */
@@ -21,11 +40,7 @@ nodeserverip = "";
 // Math function aliases
 ABS = Math.abs, MAX = Math.max, MIN = Math.min, CEIL = Math.ceil, FLOOR = Math.floor, ROUND = Math.round;
 
-/*
-** Array copy
-** I would make this an Array.prototype function but
-** that usually breaks everything, so let's play it safe
-*/
+/* Array copy I would make this an Array.prototype function but that usually breaks everything, so let's play it safe */
 function ARCPY(arr) {
 	var arrcpy = new Array(arr.length), i = 0;
 	for(; i < arr.length; i++) {
@@ -34,14 +49,10 @@ function ARCPY(arr) {
 	return arrcpy;
 }
 
-/*
-** Console debug alias
-*/
+/* Console debug alias */
 function CL(str) { console.log(str); }
 
-/*
-** Debug variable values
-*/
+/* Debug variable values */
 function VD() {
 	var a = [];
 	for(var i = 0; i < arguments.length; i++) {
@@ -50,57 +61,41 @@ function VD() {
 	CL(a);
 }
 
-/*
-** Get canvas 2D context
-*/
+/* Get canvas 2D context */
 function GC(c) { return c.getContext("2d"); }
 
-/*
-** Set cursor
-*/
+/* Set cursor */
 function SC(cursor) {
 	canvas.style.cursor = cursor == undefined ? "auto" : cursor;
 }
 
-/*
-** Get element alias
-*/
+/* Get element alias */
 function E(name) {
 	if(name.charAt(0) == ".")
 		return document.getElementsByClassName(name.substr(1));
 	return document.getElementById(name);
 }
 
-/*
-** Show/hide element
-*/
+/* Show/hide element */
 function D(e, show) {
 	show == true ? e.style.display = "block" : e.style.display = "none";
 }
 
-/*
-** Timing alias
-*/
+/* Timing alias */
 function T() { return window.performance.now(); }
 
-/*
-** Test within bounds (object based)
-*/
+/* Test within bounds (object based) */
 function WB(x, y, obj) {
 	if(!obj || obj.x == undefined || obj.y == undefined || obj.w == undefined || obj.h == undefined) return false;
 	return x >= obj.x && x <= obj.x+obj.w && y >= obj.y && y <= obj.y+obj.h;
 }
 
-/*
-** Test within bounds (number based)
-*/
+/* Test within bounds (number based) */
 function WC(x1, y1, x2, y2, w, h) {
 	return x1 >= x2 && x1 <= x2+w && y1 >= y2 && y1 <= y2+h;
 }
 
-/*
-** Clamp number
-*/
+/* Clamp number */
 function Clamp(num, min, max) {
 	max < min ? max = min : num;
 	num < min ? num = min : num;
@@ -108,9 +103,7 @@ function Clamp(num, min, max) {
 	return num;
 }
 
-/*
-** Go fullscreen
-*/
+/* Go fullscreen */
 function FS() {
 	if(!canvas) return;
 	if(canvas.requestFullScreen)
@@ -122,9 +115,7 @@ function FS() {
 	InFullscreen = true;
 }
 
-/*
-** Cancel fullscreen
-*/
+/* Cancel fullscreen */
 function CFS() {
 	if(document.cancelFullScreen)
 		document.cancelFullScreen();
@@ -135,37 +126,31 @@ function CFS() {
 	InFullscreen = false;
 }
 
-/*
-** Toggle fullscreen
-*/
+/* Toggle fullscreen */
 function TFS() {
 	InFullscreen ? CFS() : FS(); 
 }
 
-/*
-** Call a function on every child object of an object/array recursively
-*/
-function RecurCall(obj, funcname) {
+/* Call a function on every child object of an object/array recursively */
+function RecurCall(obj, func) {
 	
-	var i = 0, a = [];
+	var i = 1, arr = [];
+	
 	for(; i < arguments.length; i++) {
-		if(!arguments[i]) break;
-		a[i] = arguments[i];
+		arr.push(arguments[i]);
 	}
 	
 	for(i in obj) {
 		if(obj[i] == undefined) continue;
 		if(obj[i] instanceof Array) {
-			RecurCall.apply(null, [obj[i]].concat(a.slice(1)));
-		} else if(obj[i][funcname] && obj[i].type == "Box") {
-			obj[i][funcname].apply(obj[i], a.slice(2));
+			RecurCall.apply(null, [obj[i]].concat(arr));
+		} else if(obj[i][func]) {
+			obj[i][func].apply(obj[i], arr.slice(1));
 		}
 	}
 }
 
-/*
-** Adjust canvas size to style size
-*/
+/* Adjust canvas size to style size */
 function FixCanvasSize() {
 
 	if(canvas.width != canvas.clientWidth || canvas.height != canvas.clientHeight) {
@@ -176,9 +161,7 @@ function FixCanvasSize() {
 	
 }
 
-/*
-** Load multiple scripts asynchronously one after another
-*/
+/* Load multiple scripts asynchronously one after another */
 function LoadScripts(src, cb) {
 	
 	// Only one script passed
@@ -203,9 +186,7 @@ function LoadScripts(src, cb) {
 	nextScript(j);
 }
 
-/*
-** Read file event
-*/
+/* Read file event */
 function ReadFiles(e) {
 	
 	if(!e) return;
@@ -229,7 +210,7 @@ function ReadFiles(e) {
 		}
 	}
 	
-	var xhr = new XMLHttpRequest();
+	/*var xhr = new XMLHttpRequest();
 	xhr.open('POST', nodeserverip+'/upload', true);
 	
 	xhr.onload = function() {			
@@ -269,15 +250,13 @@ function ReadFiles(e) {
 		//CL(xhr.status +"\t"+xhr.responseText);
 	};
 	
-	xhr.send(form);
+	xhr.send(form);*/
 	
 	e.preventDefault();
 	e.stopPropagation();
 }
 
-/*
-** Start up the editor
-*/
+/* Start up the editor */
 function StartEditor() {
 
 	ALPHA_BG = IMG("alpha.png");
@@ -318,16 +297,12 @@ function StartEditor() {
 	});	
 }
 
-/*
-** Update canvas draw
-*/
+/* Update canvas draw */
 function Update() {
 	LastUpdate = Frame;
 }
 
-/*
-** Detect mouse events
-*/
+/* Detect mouse events */
 function MouseDetect(event) {
 	
 	var t = event.target, type = event.type.indexOf("Scroll") > -1 ? "wheel" : event.type.replace("mouse", "");
@@ -355,11 +330,9 @@ function MouseDetect(event) {
 	}
 }
 
-/*
-** Detect keyboard events
-*/
+/* Detect keyboard events */
 function Hotkeys(event) {
-	var k = event.key.toLowerCase(), ct = event.ctrlKey, sh = event.shiftKey, alt = event.altKey, hk = u = false;
+	var ct = event.ctrlKey, k = event.key ? event.key : String.fromCharCode(event.charCode+(ct?96:0)).toLowerCase(), sh = event.shiftKey, alt = event.altKey, hk = u = false;
 	
 	if(ct) {
 		hk = u = true;	
@@ -380,8 +353,8 @@ function Hotkeys(event) {
 						u = false;
 						break;
 						
-			case 'p': IMGFX.Colorize();
-						IMGFX.AddHistory("Colorize");
+			case 'a': IMGFX.AutoContrast();
+						IMGFX.AddHistory("Auto Contrast");
 						break;
 						
 			case 'q': CL("Blocked quit hotkey!");
@@ -402,12 +375,9 @@ function Hotkeys(event) {
 	} else {
 		TypeDetect(event);
 	}
-	
 }
 
-/*
-** Detect regular typing
-*/
+/* Detect regular typing */
 function TypeDetect(event) {
 	
 	if(!FocusObj || FocusObj.value == undefined) return;
@@ -488,9 +458,7 @@ function TypeDetect(event) {
 	
 }
 
-/*
-** Return a 1D array of all text object children in a parent object
-*/
+/* Return a 1D array of all text object children in a parent object */
 function GetTextChildren(parent, children) {
 	
 	if(!children) children = [];
@@ -506,9 +474,7 @@ function GetTextChildren(parent, children) {
 	}
 }
 
-/*
-** Quick line
-*/
+/* Quick line */
 function DrawLine(ctx, x1, y1, x2, y2) {
 	ctx.beginPath();
 	ctx.moveTo(x1, y1);
@@ -517,11 +483,7 @@ function DrawLine(ctx, x1, y1, x2, y2) {
 	ctx.closePath();
 }
 
-/*
-** Rounded rectangle
-** Written by Juan Mendes
-** Modified by Blobware
-*/
+/* Rounded rectangle Written by Juan Mendes Modified by Blobware */
 function RoundRect(ctx, x, y, w, h, r, fill, stroke, half) {
 	
 	if(typeof r == "undefined") r = 5;
@@ -556,11 +518,10 @@ function RoundRect(ctx, x, y, w, h, r, fill, stroke, half) {
 	
 }
 
-/*
-** RGB to HSL
-** Written by Mohsen
-*/
+/* RGB to HSL Written by Mohsen */
 function RGB2HSL(r, g, b) {
+	
+	if(r instanceof Array) return RGB2HSL(r[0], r[1], r[2]);
 
 	r /= 255, g /= 255, b /= 255;
 	var max = MAX(r, g, b), min = MIN(r, g, b);
@@ -583,10 +544,7 @@ function RGB2HSL(r, g, b) {
 }
 
 
-/*
-** HSL to RGB
-** Written by Mohsen
-*/
+/* HSL to RGB Written by Mohsen */
 
 function h2r(p, q, t) {
 	if(t < 0) t += 1;
@@ -613,9 +571,7 @@ function HSL2RGB(h, s, l) {
 	return [CEIL(r * 255), CEIL(g * 255), CEIL(b * 255)];
 }
 
-/*
-** Return rgba() string
-*/
+/* Return rgba() string */
 function rgba(r, g, b, a) {
 	if(r instanceof Array) {
 		var cpy = [r[0], r[1], r[2], r[3]/255];
@@ -644,9 +600,7 @@ function getByteLen(normal_val) {
     return byteLen;
 }
 
-/*
-** Change color HSL directly
-*/
+/* Change color HSL directly */
 function ShiftHSL(r, g, b, hf, sf, lf) {
 
 	r /= 255, g /= 255, b /= 255;
@@ -684,80 +638,42 @@ function ShiftHSL(r, g, b, hf, sf, lf) {
 	
 }
 
-/*
-** Image data container
-*/
+/* Image data container */
 function ImageData(w, h) {
-	this.width = w;
-	this.height = h;
-	this.data = [];
+	return GC(canvas).createImageData(w, h);
 }
 
-/*
-** Return multiplier required to scale w, h to mw, mh
-*/
+/* Selection container */
+function Selection(x, y, w, h) {
+	this.x = x;
+	this.y = y;
+	this.w = w;
+	this.h = h;
+}
+
+/* Return multiplier required to scale w, h to mw, mh */
 function GetScaleToFit(w, h, mw, mh) {
 	return w-mw > h-mh ? mw/w : mh/h;
 }
 
-/*
-** Clone image data
-** Redudancy = Less looping = less lag
-*/
+/* Clone image data */
 function CloneImg(g) {
 
-	var n = new ImageData(g.width, g.height);
+	var w = g.width, h = g.height, n = ImageData(w, h), d = n.data, d2 = g.data, i = j = 0;
 	
-	imgcpy(n, g);
+	for(; j < w*h; j++) {
+		i = j*4;
+		d[i] = d2[i];
+		d[i+1] = d2[i+1];
+		d[i+2] = d2[i+2];
+		d[i+3] = d2[i+3];
+	}
 	
 	return n;
 	
 }
 
-// Core clone image funcition
-function imgcpy(n, g) {
-
-	var d = n.data, e = g.data, el = (g.width*g.height)/8, i = j = 0;
-	for(; j < el; j++) {
-		i = j * 32;
-		d[i] = e[i];
-		d[i+1] = e[i+1];
-		d[i+2] = e[i+2];
-		d[i+3] = e[i+3];
-		d[i+4] = e[i+4];
-		d[i+5] = e[i+5];
-		d[i+6] = e[i+6];
-		d[i+7] = e[i+7];
-		d[i+8] = e[i+8];
-		d[i+9] = e[i+9];
-		d[i+10] = e[i+10];
-		d[i+11] = e[i+11];
-		d[i+12] = e[i+12];
-		d[i+13] = e[i+13];
-		d[i+14] = e[i+14];
-		d[i+15] = e[i+15];
-		d[i+16] = e[i+16];
-		d[i+17] = e[i+17];
-		d[i+18] = e[i+18];
-		d[i+19] = e[i+19];
-		d[i+20] = e[i+20];
-		d[i+21] = e[i+21];
-		d[i+22] = e[i+22];
-		d[i+23] = e[i+23];
-		d[i+24] = e[i+24];
-		d[i+25] = e[i+25];
-		d[i+26] = e[i+26];
-		d[i+27] = e[i+27];
-		d[i+28] = e[i+28];
-		d[i+29] = e[i+29];
-		d[i+30] = e[i+30];
-		d[i+31] = e[i+31];
-	}
-}
-
-/*
-** Load image
-*/
+/* Load image */
 function IMG(src) {
 	var i = new Image();
 	i.src = src;
@@ -774,9 +690,7 @@ function IMG(src) {
 	return i;
 }
 
-/*
-** Show the open dialog
-*/
+/* Show the open dialog */
 function OpenDialog() {
 	if(FileDialog == undefined) {
 		FileDialog = document.createElement("input");
@@ -787,9 +701,7 @@ function OpenDialog() {
 	FileDialog.click();
 }
 
-/*
-** Open image in editor
-*/
+/* Open image in editor */
 function OpenImage(src, name) {
 	CloseImage();	
 	var img = IMG(src);
@@ -799,9 +711,7 @@ function OpenImage(src, name) {
 	document.title = "Photoblob - ["+name+"]";
 }
 
-/*
-** Create new image
-*/
+/* Create new image */
 function NewImage(w, h) {
 	
 	if(isNaN(w)) w = 128;
@@ -815,9 +725,7 @@ function NewImage(w, h) {
 	document.title = "Photoblob - [newimage.png]";
 }
 
-/*
-** Close image in editor
-*/
+/* Close image in editor */
 function CloseImage() {
 	if(ImageArea.open) {
 		IMGFX.ClearHistory();
@@ -828,9 +736,7 @@ function CloseImage() {
 	}
 }
 
-/*
-** Load image data
-*/
+/* Load image data */
 function LoadImageData(img) {
 	
 	var imgcan = document.createElement("canvas");
@@ -843,15 +749,13 @@ function LoadImageData(img) {
 	return ctx.getImageData(0, 0, img.width, img.height);
 }
 
-/*
-** Save image data
-*/
+/* Save image data */
 function ExportImage() {
 
 	var img = ImageArea.img, eimg = E("e-img"), econt = E("export-img"), emsg = E("e-msg"), eload = E("e-load");
 	if(!img || !eimg || !econt) return;
 	
-	var w = img.width, h = img.height, cW = document.getBoxQuads()[0].bounds.width, cH = document.getBoxQuads()[0].bounds.height,
+	var w = img.width, h = img.height, cW = window.innerWidth, cH = window.innerHeight,
 	imgcan = document.createElement("canvas"), eper = GetScaleToFit(w, h, cW/2, cH/2), iX, iY;
 	
 	CFS();
@@ -900,16 +804,12 @@ function ExportImage() {
 	
 }
 
-/*
-** Close the image export thing
-*/
+/* Close the image export thing */
 function CloseImageExport() {
 	D(E("export-img"), false);
 }
 
-/*
-** Initiate menus
-*/
+/* Initiate menus */
 function InitMenus() {
 	for(var m in MenuBar.items) {
 		switch(MenuBar.items[m].name) {
@@ -933,6 +833,7 @@ function InitMenus() {
 			case "Image":
 				MenuBar.items[m].setMenu(new Menu([
 					new MenuItem("Brightness", PBOX.Brightness, "open"),
+					new MenuItem("Auto Contrast", function(){IMGFX.AutoContrast(); IMGFX.AddHistory("Auto Contrast");}),
 					new MenuItem("Rotate", IMGFX.Rotate),
 					new MenuItem("Mirror", PBOX.Mirror, "open"),
 					new MenuItem("Shift", PBOX.Shift, "open"),
@@ -994,13 +895,11 @@ function InitMenus() {
 }
 
 
-/*
-** Set the color theme
-*/
+/* Set the color theme */
 function SetTheme(num) {
 
 	// Most used
-	F1 = "Purisa", C1 = "#DD9", C2 = "#DD6", C3 = "#AA8", BLK = "#000", GRY = "#666";
+	F1 = "Purisa", C1 = "#DD9", C2 = "#DD6", C3 = "#AA8", WHT = "#FFF", BLK = "#000", GRY = "#666";
 
 	switch(num) {
 		

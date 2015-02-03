@@ -1,8 +1,23 @@
+/* Photoblob Image/Texture Editor and 3D Model Viewer (http://photo.blob.software/)
+ * Copyright (C) 2015 Vincent Costanza
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 /* CLASS DEFINITIONS */
 
-/*
-** Generic box class
-*/
+/* Generic box class */
 Box = Class.extend({
 	
 	// Constructor: new Box(x, y, w, h)
@@ -49,9 +64,7 @@ Box = Class.extend({
 	
 });
 
-/*
-** Menu bar item
-*/
+/* Menu bar item */
 MenuBarItem = Box.extend({
 	init: function(name) {
 		this.name = name;
@@ -64,7 +77,7 @@ MenuBarItem = Box.extend({
 	setMenu: function(menu) {
 		this.menu = menu;
 	},
-	draw: function(ctx) {	
+	draw: function(ctx) {
 		if(MenuBar.highlight == this)
 			ctx.fillStyle = BG6;
 		else
@@ -81,9 +94,7 @@ MenuBarItem = Box.extend({
 	}
 });
 
-/*
-** Menu
-*/
+/* Menu */
 Menu = Box.extend({
 	init: function(options) {
 		this.options = options;
@@ -130,9 +141,7 @@ Menu = Box.extend({
 	}
 });
 
-/*
-** Menu item
-*/
+/* Menu item */
 MenuItem = Class.extend({
 	init: function(name, caller, func) {
 		this.name = name;
@@ -148,20 +157,17 @@ MenuItem = Class.extend({
 				this.empty = true;
 			}
 			
-			this.func = caller;			
+			this.func = caller;
 			
 		// Caller matters
 		} else {
 			this.caller = caller;
 			this.func = func;
-		}
-		
+		}		
 	}
 });
 
-/*
-** Button
-*/
+/* Button */
 Button = Box.extend({
 	init: function(text) {
 		this._super();
@@ -207,20 +213,18 @@ Button = Box.extend({
 	}
 });
 
-/*
-** Image button
-*/
+/* Image button */
 ImageButton = Button.extend({
 	init: function(img, w, h) {
 		this._super("");
 		this.size(w, h);
-		this.loadImage(img);
+		this.loadImage(img, 1);
 	},
-	loadImage: function(img) {
+	loadImage: function(img, chances) {
 		if(img.complete) {
 			this.img = img;
-		} else {
-			img.onload = this.loadImage(img);
+		} else if(chances < 10) {
+			img.onload = this.loadImage(img, chances+1);
 		}
 	},
 	draw: function(ctx) {
@@ -236,10 +240,8 @@ ImageButton = Button.extend({
 	}
 });
 
-/*
-** Radio button
-** NOTE: Only asthetic, functionality is implemented separately
-*/
+/* Radio button
+** NOTE: Only asthetic, functionality is implemented separately */
 RadioButton = Box.extend({
 	init: function(text, value) {
 		this._super();
@@ -268,13 +270,11 @@ RadioButton = Box.extend({
 		
 		ctx.fillStyle = C1;
 		ctx.font = "14px "+F1;
-		ctx.fillText(this.text, this.x+25, this.y+16);		
+		ctx.fillText(this.text, this.x+25, this.y+16);
 	}
 });
 
-/*
-** Clickable check box
-*/
+/* Clickable check box */
 CheckBox = Box.extend({
 	init: function(text, value) {
 		this._super();
@@ -302,9 +302,7 @@ CheckBox = Box.extend({
 	}
 });
 
-/*
-** Draggable slider
-*/
+/* Draggable slider */
 Slider = Box.extend({
 	init: function(w) {
 		this._super();
@@ -341,9 +339,7 @@ Slider = Box.extend({
 	}
 });
 
-/*
-** Input box
-*/
+/* Input box */
 TextBox = Box.extend({
 	init: function(parent, w, h, def, len, n, min, max) {
 		if(!len) len = -1;
@@ -361,7 +357,7 @@ TextBox = Box.extend({
 		this.ind = 0;
 	},
 	get: function(asString) {
-		if(this.numOnly) {			
+		if(this.numOnly) {
 			var v = num = this.value;
 			
 			if(v == "") num = 0;
@@ -377,7 +373,7 @@ TextBox = Box.extend({
 	},
 	unfocus: function() {
 		if(this == FocusObj) {
-			if(this.numOnly && this.get(true) == "") this.value = 0;	// Set empty number-only text fields to zero
+			if(this.numOnly && this.get(true) == "") this.value = 0;// Set empty number-only text fields to zero
 			FocusObj = null;
 			Update();
 		}
@@ -433,7 +429,7 @@ TextBox = Box.extend({
 		c.fillRect(this.x, this.y, this.w, this.h);
 		
 		// Text
-		c.fillStyle = C1, c.font = (this.h-4)+"px "+F1;		
+		c.fillStyle = C1, c.font = (this.h-4)+"px "+F1;
 		c.fillText(this.value, this.x+4, this.y+this.h-4, this.w-8);
 		
 		// Selection bar thing
@@ -452,9 +448,7 @@ TextBox = Box.extend({
 	}
 });
 
-/*
-** Label
-*/
+/* Label */
 Label = Box.extend({
 	init: function(w, h, text) {
 		this._super();
@@ -465,15 +459,13 @@ Label = Box.extend({
 	},
 	draw: function(ctx) {
 		
-		ctx.fillStyle = C1, ctx.font = (this.h-4)+"px "+F1;		
+		ctx.fillStyle = C1, ctx.font = (this.h-4)+"px "+F1;
 		ctx.fillText(this.value, this.x+4, this.y+this.h-4, this.w-8);
 		
 	}
 });
 
-/*
-** Drop down menu
-*/
+/* Drop down menu */
 DDMenu = Box.extend({
 	init: function(title, items) {
 		this._super();
@@ -485,9 +477,7 @@ DDMenu = Box.extend({
 	}
 });
 
-/*
-** Color bar
-*/
+/* Color bar */
 ColorBar = Box.extend({
 	init: function(w, h, grad) {
 		this._super();
@@ -518,7 +508,7 @@ ColorBar = Box.extend({
 		ctx.lineWidth = 2;
 		if(grad.length <= 1) {
 			ctx.fillStyle = rgba(grad[0]);
-		} else {		
+		} else {
 			for(; i < grad.length; i++) {
 				stop = grad[i].stop;
 				if(stop == null || stop < 0 || stop > 1) stop = i/(grad.length-1);
@@ -532,7 +522,7 @@ ColorBar = Box.extend({
 		
 		// Slider
 		ctx.lineWidth = 2;
-		ctx.strokeStyle = "#FFF";
+		ctx.strokeStyle = WHT;
 		ctx.fillStyle = BLK;
 		ctx.strokeRect(posX-1, this.y+1, 3, this.h-2);
 		ctx.fillRect(posX-1, this.y, 3, this.h);
@@ -590,9 +580,7 @@ FrameNum = {
 	}
 };
 
-/*
-** The editing area
-*/
+/* The editing area */
 EditArea = {
 	x: 85,
 	y: 40,
@@ -600,8 +588,9 @@ EditArea = {
 	h: 0,
 	
 	// Specific vars
-	selectArea: {x1: 0, y1: 0, x2: 0, y2: 0},
+	selectArea: {x: 0, y: 0, x2: 0, y2: 0},
 	mouseDown: false,
+	selecting: false,
 	
 	detect: function(x, y, type) {
 	
@@ -610,17 +599,38 @@ EditArea = {
 			return;
 		}
 	
-		if(Toolbox.get("Box Select")) {
+		if(Toolbox.get("Box Select") && ImageArea.open) {
+			if(type == "click") return;
 		
 			var s = this.selectArea;
-		
-			if(type == "click") return;
-			if(type == "down") {
-				s.x1 = x;
-				s.y1 = y;
-			} else if(type == "up") {
-				s.x2 = x;
-				s.y2 = y;
+			
+			if(this.selecting) {
+				if(type == "up") {
+					
+					x = Clamp(x-ImageArea.x, 0, ImageArea.w);
+					y = Clamp(y-ImageArea.y, 0, ImageArea.h);
+					s.x = Clamp(s.x-ImageArea.x, 0, ImageArea.w);
+					s.y = Clamp(s.y-ImageArea.y, 0, ImageArea.h);
+					
+					var sx = (x < s.x ? x : s.x), sy = (y < s.y ? y : s.y);
+					
+					IMGFX.SetSelection(new Selection(sx, sy, ABS(s.x-x), ABS(s.y-y)));
+					this.selecting = false;
+				} else if(type == "move") {
+					s.x2 = x;
+					s.y2 = y;
+				} else if(type == "wheelup") {
+					s.x = Clamp(s.x-1, 0, EditArea.w);
+					s.y = Clamp(s.y-1, 0, EditArea.h);
+				} else if(type == "wheeldown") {
+					s.x = Clamp(s.x+1, 0, EditArea.w);
+					s.y = Clamp(s.y+1, 0, EditArea.h);
+				}
+				Update();
+			} else if(type == "down") {
+				s.x = x;
+				s.y = y;
+				this.selecting = true;
 			}
 			SC("crosshair");
 		} else if(Toolbox.get("Color Pick")) {
@@ -632,7 +642,7 @@ EditArea = {
 					y -= ImageArea.y;
 					d = IMGFX.SampleColor(x, y, 1);
 				} else {
-					d = ctx.getImageData(x, y, 1, 1).data;					
+					d = ctx.getImageData(x, y, 1, 1).data;
 				}
 				MainColors.setFG(d);
 				MainColors.drawInside(ctx);
@@ -640,7 +650,7 @@ EditArea = {
 				Toolbox.clear();
 				Update();
 			}
-		} else if(Toolbox.get("Brush")) {
+		} else if(Toolbox.get("Brush") || Toolbox.get("Erase")) {
 			if(WB(x, y, ImageArea) && type == "down")
 				this.mouseDown = true;
 			if(this.mouseDown) {
@@ -648,22 +658,21 @@ EditArea = {
 					x -= ImageArea.x;
 					y -= ImageArea.y;
 					var bd = Toolbox.getData();
-					IMGFX.ApplyBrush(x, y, MainColors.fg, bd.brush[0]);
-					//ImageArea.draw(GC(canvas));
+					IMGFX.ApplyBrush(x, y, MainColors.fg, bd.brush[0], Toolbox.active.name == "Erase");
 					Update();
 				} else if(type == "up") {
 					this.mouseDown = false;
-					IMGFX.AddHistory("Brush");
+					IMGFX.AddHistory(Toolbox.active.name);
 					Update();
 				}
 			}
-		} else if(Toolbox.get("Fill")) {			
+		} else if(Toolbox.get("Fill")) {
 			if(WB(x, y, ImageArea)) {
 				SC("crosshair");
 				if(type == "click") {
 					x -= ImageArea.x;
 					y -= ImageArea.y;
-					IMGFX.Fill(x, y, MainColors.fg, 100);
+					IMGFX.Fill(x, y, MainColors.fg, 20);
 					Update();
 				}
 			} else {
@@ -672,7 +681,7 @@ EditArea = {
 		}
 	},
 	
-	draw: function(ctx) {		
+	draw: function(ctx) {
 		this.w = Clamp(canvas.width-this.x-200, 0, canvas.width);
 		this.h = canvas.height-this.y;
 		
@@ -681,9 +690,7 @@ EditArea = {
 	}
 };
 
-/*
-** The image area
-*/
+/* The image area */
 ImageArea = {
 	x: 0,
 	y: 0,
@@ -693,7 +700,7 @@ ImageArea = {
 	open: false,
 	tempimg: undefined,
 	img: undefined,
-	draw: function(ctx) {		
+	draw: function(ctx) {
 		if(!this.open) return;
 		
 		// Wait for image load then store its data
@@ -717,12 +724,24 @@ ImageArea = {
 		this.y = Clamp(FLOOR((EditArea.h-this.h)/2+EditArea.y), EditArea.y, EditArea.h);
 		
 		ctx.putImageData(this.img, this.x, this.y, 0, 0, this.w, this.h);
+		
+		// Draw selection mask
+		var sel = IMGFX.selection;
+		if(sel && sel.img) {
+			ctx.drawImage(sel.img, this.x+sel.x, this.y+sel.y, sel.w, sel.h);
+		}
+		
+		// Draw temporary selection
+		if(EditArea.selecting) {
+			sel = EditArea.selectArea;
+			ctx.strokeStyle = WHT;
+			ctx.lineWidth = 1;
+			ctx.strokeRect(sel.x, sel.y, sel.x2-sel.x, sel.y2-sel.y);
+		}
 	}
 };
 
-/*
-** Menu bar
-*/
+/* Menu bar */
 MenuBar = {
 	x: 0,
 	y: 0,
@@ -740,7 +759,7 @@ MenuBar = {
 		if(!type) type = "click";
 		var item = undefined;
 		
-		if(WB(x, y, this)) {	
+		if(WB(x, y, this)) {
 			for(var i in this.items) {
 				if(WB(x, y, this.items[i])) {
 					item = this.items[i];
@@ -859,9 +878,7 @@ MenuBar = {
 	}
 };
 
-/*
-** Toolbox
-*/
+/* Toolbox */
 Toolbox = {
 	x: 0,
 	y: 40,
@@ -889,7 +906,7 @@ Toolbox = {
 	},
 	
 	// Hit detection
-	detect: function(x, y, type) {	
+	detect: function(x, y, type) {
 		if(!WB(x, y, this)) {
 			this.setHighlight(undefined);
 			return;
@@ -906,7 +923,7 @@ Toolbox = {
 		}
 			
 		// Menu items
-		if(tool) {		
+		if(tool) {
 			if(type == "click") this.setTool(tool);
 			if(type == "move") this.setHighlight(tool);
 		} else {
@@ -927,7 +944,7 @@ Toolbox = {
 	
 	// Set the active tool
 	setTool: function(t) {
-		if(this.active != t) {			
+		if(this.active != t) {
 			if(t.name == "Brush" || t.name == "Erase") {
 				//var erase = t.name == "Erase";
 				t.data = {brush: [Brushes.get(1, 100), Brushes.get(2, 75), Brushes.get(2, 50)]};
@@ -971,9 +988,7 @@ Toolbox = {
 };
 
 
-/*
-** Tool icon and data
-*/
+/* Tool icon and data */
 function Tool(name) {
 	this.name = name,
 	this.w = 30,
@@ -997,9 +1012,7 @@ function Tool(name) {
 	};
 }
 
-/*
-** Color indicator
-*/
+/* Color indicator */
 MainColors = {
 	x: 0,
 	y: 0,
@@ -1030,7 +1043,7 @@ MainColors = {
 		return ARCPY(this.bg)
 	},
 	
-	detect: function(x, y, type) {		
+	detect: function(x, y, type) {
 		if(type != "click" || !WB(x, y, this)) return;
 		
 		// Foreground color box
@@ -1100,7 +1113,7 @@ MainColors = {
 			RoundRect(ctx, x+w-cs-10, y+h-cs-10, cs, cs, 10, true, false, true);
 		}
 		ctx.fillStyle = rgba(this.bg);
-		RoundRect(ctx, x+w-cs-10, y+h-cs-10, cs, cs, 10, true, true, true);		
+		RoundRect(ctx, x+w-cs-10, y+h-cs-10, cs, cs, 10, true, true, true);
 		
 		// Foreground color box
 		if(this.fg[3] < 255) {
@@ -1112,10 +1125,10 @@ MainColors = {
 		
 		// Reset button
 		ctx.lineWidth = 1;
-		ctx.fillStyle = "#000";
+		ctx.fillStyle = BLK;
 		ctx.fillRect(x+15, y+h-20, 10, 10);
 		ctx.strokeRect(x+15, y+h-20, 10, 10);
-		ctx.fillStyle = "#FFF";
+		ctx.fillStyle = WHT;
 		ctx.fillRect(x+10, y+h-25, 10, 10);
 		ctx.strokeRect(x+10, y+h-25, 10, 10);
 		
@@ -1131,9 +1144,7 @@ MainColors = {
 	
 };
 
-/*
-** History
-*/
+/* History */
 HistoryBox = {
 	x: 0,
 	y: 40,
@@ -1161,7 +1172,7 @@ HistoryBox = {
 		var l = IMGFX.history.length,
 		item = FLOOR((y-this.y-10)/this.ih)+Clamp(l-FLOOR((this.h-20)/this.ih), 0, l);
 		
-		if(item > -1 && item < l) {		
+		if(item > -1 && item < l) {
 			if(type == "click")
 				IMGFX.LoadHistory(item);
 			else if(type == "move")
@@ -1201,9 +1212,7 @@ HistoryBox = {
 	}
 };
 
-/*
-** Layers
-*/
+/* Layers */
 LayersBox = {
 	x: 0,
 	y: 0,
@@ -1232,9 +1241,7 @@ LayersBox = {
 	}
 };
 
-/*
-** Brushes
-*/
+/* Brushes */
 Brushes = {
 	
 	// The base brush images
@@ -1261,9 +1268,7 @@ Brushes = {
 	
 }
 
-/*
-** Draw the editor loop
-*/
+/* Draw the editor loop */
 function DrawEditor() {
 
 	if(!canvas) return;
