@@ -114,7 +114,7 @@ Menu = Box.extend({
 		this.w = 0;
 		this.h = (opt.length*20)+6;
 		
-		var w = i = 0;
+		var w = 0, i = 0;
 	
 		for(; i < opt.length; i++) {
 			w = ctx.measureText(opt[i].name).width+10;
@@ -589,6 +589,8 @@ EditArea = {
 	
 	// Specific vars
 	selectArea: {x: 0, y: 0, x2: 0, y2: 0},
+	path: [],
+	path_last: 0,
 	mouseDown: false,
 	selecting: false,
 	
@@ -614,7 +616,7 @@ EditArea = {
 					
 					var sx = (x < s.x ? x : s.x), sy = (y < s.y ? y : s.y);
 					
-					IMGFX.SetSelection(new Selection(sx, sy, ABS(s.x-x), ABS(s.y-y)));
+					IMGFX.SEL_SetBox(new Selection(sx, sy, ABS(s.x-x), ABS(s.y-y)));
 					this.selecting = false;
 				} else if(type == "move") {
 					s.x2 = x;
@@ -678,6 +680,33 @@ EditArea = {
 			} else {
 				SC();
 			}
+		} else if(Toolbox.get("Pen") && ImageArea.open) {
+			var p = this.path, i = this.path_last*2, imx = ImageArea.x, imy = ImageArea.y;
+			
+			x -= imx;
+			y -= imy;
+			
+			if(type == "click") {
+				p[i] = x;
+				p[i+1] = y;
+				this.mouseDown = !this.mouseDown;
+				Update();
+				this.path_last++;
+				
+				// Double-click = path done
+				if(i > 4 && p[i-2] == x && p[i-1] == y) {
+					p[i] = p[0];
+					p[i+1] = p[1];
+					IMGFX.SEL_SetPoly(ARCPY(p));
+					this.path_last = 0;
+					this.path = [];
+				}
+			} else if(type == "move") {
+				p[i] = x;
+				p[i+1] = y;
+				if(i > 0) Update();
+			}
+			SC("crosshair");
 		}
 	},
 	
@@ -731,12 +760,20 @@ ImageArea = {
 			ctx.drawImage(sel.img, this.x+sel.x, this.y+sel.y, sel.w, sel.h);
 		}
 		
+		ctx.lineWidth = 1;
+		
 		// Draw temporary selection
 		if(EditArea.selecting) {
 			sel = EditArea.selectArea;
 			ctx.strokeStyle = WHT;
-			ctx.lineWidth = 1;
 			ctx.strokeRect(sel.x, sel.y, sel.x2-sel.x, sel.y2-sel.y);
+		}
+		
+		// Draw temp path
+		var p = EditArea.path, i = 0;
+		ctx.strokeStyle = BLK;
+		for(; i < p.length-2; i+=2) {
+			DrawLine(ctx, this.x+p[i], this.y+p[i+1], this.x+p[i+2], this.y+p[i+3]);
 		}
 	}
 };

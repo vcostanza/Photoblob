@@ -35,7 +35,7 @@ InFullscreen = false;
 
 // Node server IP
 // Should be left blank if node server is hosted on same server as this site
-nodeserverip = "";
+NODE_SERVER = "";
 
 // Math function aliases
 ABS = Math.abs, MAX = Math.max, MIN = Math.min, CEIL = Math.ceil, FLOOR = Math.floor, ROUND = Math.round;
@@ -49,16 +49,17 @@ function ARCPY(arr) {
 	return arrcpy;
 }
 
-/* Console debug alias */
-function CL(str) { console.log(str); }
-
 /* Debug variable values */
-function VD() {
-	var a = [];
-	for(var i = 0; i < arguments.length; i++) {
-		a[i] = arguments[i];
-	}
-	CL(a);
+function CL() {
+	if(arguments.length > 1) {
+		var a = new Array(arguments.length), i = 0;
+		for(; i < arguments.length; i++) {
+			a[i] = arguments[i];
+		}
+		console.log(a);
+	} else {
+		console.log(arguments[0]);
+	}	
 }
 
 /* Get canvas 2D context */
@@ -167,7 +168,7 @@ function LoadScripts(src, cb) {
 	// Only one script passed
 	if(typeof src == "string") src = [src];
 	
-	var j = scr = 0,
+	var j = 0, scr = null,
 	nextScript = function(i) {
 		scr = document.createElement('script');
 		scr.src = src[i];
@@ -191,7 +192,7 @@ function ReadFiles(e) {
 	
 	if(!e) return;
 	
-	var reader = new FileReader(), form = new FormData(), f = i = 0;
+	var reader = new FileReader(), form = new FormData(), f = null, i = 0;
 	
 	if(e.dataTransfer) f = e.dataTransfer.files;
 	else f = e.target.files;
@@ -211,18 +212,18 @@ function ReadFiles(e) {
 	}
 	
 	/*var xhr = new XMLHttpRequest();
-	xhr.open('POST', nodeserverip+'/upload', true);
+	xhr.open('POST', NODE_SERVER+'/upload', true);
 	
 	xhr.onload = function() {			
 		var xh2 = new XMLHttpRequest();
-		xh2.open('POST', nodeserverip+'/search', true);
+		xh2.open('POST', NODE_SERVER+'/search', true);
 		xh2.onload = function() {
 			
 			if(xh2.status == 200) {
 				
 				// Check that cookies are enabled
 				if(xh2.response.indexOf("Cookies disabled") == 0) {
-					CL("You have cookies disabled for this site. Please allow cookies from "+(nodeserverip == "" ? window.location.hostname : nodeserverip.substring(0, nodeserverip.indexOf(':'))));
+					CL("You have cookies disabled for this site. Please allow cookies from "+(NODE_SERVER == "" ? window.location.hostname : NODE_SERVER.substring(0, NODE_SERVER.indexOf(':'))));
 				} else if(xh2.response.indexOf("Error") == 0) {
 					// Do nothing
 				} else {
@@ -265,6 +266,8 @@ function StartEditor() {
 	
 	FixCanvasSize();
 	SetTheme(17);
+	
+	CloneWindow();
 	
 	//var t = T();
 	
@@ -518,6 +521,35 @@ function RoundRect(ctx, x, y, w, h, r, fill, stroke, half) {
 	
 }
 
+function SpeedTest(func, arg, iter, freq, sum, cb) {		
+	if(iter < 1) {
+		cb(sum);
+		return;
+	}
+	if(sum == null) {
+		sum = 0;
+		CL("Performing speed test for "+func.name+"...");
+		cb = function(s) {
+			var avg = s/iter;
+			CL("Average time for "+func.name+": "+(ROUND(avg*1000)/1000)+" ms");
+		}
+	}
+	
+	var t1 = T();
+	
+	func.apply(null, arg);
+	
+	sum += (T()-t1);
+	
+	if(freq > 0) {
+		setTimeout(function() {
+			SpeedTest(func, arg, iter-1, freq, sum, cb);
+		}, freq);
+	} else {
+		SpeedTest(func, arg, iter-1, freq, sum, cb);
+	}
+}
+
 /* RGB to HSL Written by Mohsen */
 function RGB2HSL(r, g, b) {
 	
@@ -659,7 +691,7 @@ function GetScaleToFit(w, h, mw, mh) {
 /* Clone image data */
 function CloneImg(g) {
 
-	var w = g.width, h = g.height, n = ImageData(w, h), d = n.data, d2 = g.data, i = j = 0;
+	var w = g.width, h = g.height, n = ImageData(w, h), d = n.data, d2 = g.data, i, j = 0;
 	
 	for(; j < w*h; j++) {
 		i = j*4;
@@ -989,3 +1021,22 @@ function SetTheme(num) {
 }
 
 document.addEventListener("DOMContentLoaded", StartEditor, false);
+
+function CloneWindow() {	
+	WinClone = [];
+	for(var i in window) {
+		WinClone.push(i);
+	}
+}
+
+function CheckWindow() {
+	var hit, diff = [];
+	for(var i in window) {
+		hit = false;
+		for(var j = 0; j < WinClone.length; j++) {
+			if(WinClone[j] == i) hit = true;
+		}
+		if(!hit && i.charAt(0) != i.charAt(0).toUpperCase()) diff.push(i);
+	}
+	console.dir(diff);
+}

@@ -253,7 +253,7 @@ PBOX_ColorBox = PBOX_Base.extend({
 	},
 	detect: function(x, y, type) {
 		
-		var changed = false, c = cx = cy = i = 0;
+		var changed = false, c = 0, cx = 0, cy = 0, i = 0;
 		
 		// Color and text boxes
 		for(; i < 4; i++) {
@@ -736,7 +736,7 @@ PBOX_ReplaceColor = PBOX_Base.extend({
 		this.st.value = 0.0;
 		this.col_a.setColor(MainColors.bg);
 		this.col_b.setColor(MainColors.fg);
-		this.col_a.onChange = this.col_b.onChange = function() { CL("ONCHANGE"); PBOX.ReplaceColor.refresh(); };
+		this.col_a.onChange = this.col_b.onChange = function() { PBOX.ReplaceColor.refresh(); };
 	},
 	apply: function() {
 		IMGFX.AddHistory("Replace Color");
