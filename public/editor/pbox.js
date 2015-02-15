@@ -164,6 +164,120 @@ PBOX_New = PBOX_Base.extend({
 	}
 });
 
+/* Resize window */
+PBOX_Resize = PBOX_Base.extend({
+	init: function() {
+		this._super("Resize", 220, 150);
+		
+		this.txt = [new TextBox(this, 80, 24, 128, 4, true, 1, 5000), new TextBox(this, 80, 24, 128, 4, true, 1, 5000)];
+		this.lbl = [new Label(80, 24, "Width:"), new Label(80, 24, "Height:")];
+		
+		this.link = new ImageButton(IMG("icons/link.svg"), 30, 30);
+		this.linked = true;
+		
+		this.txt[0].onchange = function(o, n) {
+			if(this.parent.linked) this.parent.txt[1].value = ROUND((this.parent.txt[1].value/o)*n);
+			this.parent.apply();
+		};
+		
+		this.txt[1].onchange = function(o, n) {
+			if(this.parent.linked) this.parent.txt[0].value = ROUND((this.parent.txt[0].value/o)*n);
+			this.parent.apply();
+		};
+		
+		this.setChildren(this.txt, this.lbl, this.link);
+	},
+	def: function() {
+		this.txt[0].value = IMGFX.tw;
+		this.txt[1].value = IMGFX.th;
+	},
+	apply: function() {
+		IMGFX.Resize(this.txt[0].get(), this.txt[1].get());
+	},
+	detect: function(x, y, type) {
+		
+		this._super(x, y, type);
+		
+		// Text boxes
+		for(var i = 0; i < this.txt.length; i++) {
+			this.txt[i].detect(x, y, type);
+		}
+		
+	},
+	draw: function(ctx) {
+		ctx.save();
+		
+		for(var i = 0; i < this.txt.length; i++) {
+			this.lbl[i].set(this.x+15, this.y+15+(i*30));
+			this.txt[i].set(this.x+100, this.y+15+(i*30));
+		}
+		
+		this.link.set(this.x+180, this.y+26);
+		
+		// Drawing begins here
+		this._super(ctx);
+	
+		ctx.restore();
+	}
+});
+
+/* Resize window */
+PBOX_Crop = PBOX_Base.extend({
+	init: function() {
+		this._super("Crop", 220, 150);
+		
+		this.txt = [new TextBox(this, 80, 24, 128, 4, true, 1, 5000), new TextBox(this, 80, 24, 128, 4, true, 1, 5000)];
+		this.lbl = [new Label(80, 24, "Width:"), new Label(80, 24, "Height:")];
+		
+		this.link = new ImageButton(IMG("icons/link.svg"), 30, 30);
+		this.linked = true;
+		
+		this.txt[0].onchange = function(o, n) {
+			if(this.parent.linked) this.parent.txt[1].value = ROUND((this.parent.txt[1].value/o)*n);
+			this.parent.apply();
+		};
+		
+		this.txt[1].onchange = function(o, n) {
+			if(this.parent.linked) this.parent.txt[0].value = ROUND((this.parent.txt[0].value/o)*n);
+			this.parent.apply();
+		};
+		
+		this.setChildren(this.txt, this.lbl, this.link);
+	},
+	def: function() {
+		this.txt[0].value = IMGFX.tw;
+		this.txt[1].value = IMGFX.th;
+	},
+	apply: function() {
+		IMGFX.Resize(this.txt[0].get(), this.txt[1].get());
+	},
+	detect: function(x, y, type) {
+		
+		this._super(x, y, type);
+		
+		// Text boxes
+		for(var i = 0; i < this.txt.length; i++) {
+			this.txt[i].detect(x, y, type);
+		}
+		
+	},
+	draw: function(ctx) {
+		ctx.save();
+		
+		for(var i = 0; i < this.txt.length; i++) {
+			this.lbl[i].set(this.x+15, this.y+15+(i*30));
+			this.txt[i].set(this.x+100, this.y+15+(i*30));
+		}
+		
+		this.link.set(this.x+180, this.y+26);
+		
+		// Drawing begins here
+		this._super(ctx);
+	
+		ctx.restore();
+	}
+});
+
 /* Color chooser */
 PBOX_ColorBox = PBOX_Base.extend({
 	init: function() {
@@ -185,7 +299,7 @@ PBOX_ColorBox = PBOX_Base.extend({
 			new TextBox(this, 80, 24, "FFFFFF", 6, false)
 		];
 		
-		this.cpick = new ImageButton(Icons["Color Pick"], 25, 25);		
+		this.cpick = new ImageButton(Icons["Color Pick"], 25, 25);
 		this.picking = false;
 		
 		this.setChildren(this.cb, this.txt, this.cpick);
@@ -959,10 +1073,89 @@ PBOX_ImageBrowser = PBOX_Base.extend({
 	}
 });
 
+/* About info */
+PBOX_About = PBOX_Base.extend({
+	init: function() {
+		this._super("About Photoblob", 420, 225, true);
+		
+		// Remove all children elements
+		delete this.b_apply;
+		delete this.b_cancel;
+		
+		// Logo
+		this.logo = IMG("favicon.png");
+		
+		// Text
+		this.name = "Photoblob";
+		this.desc = "Image/Texture Editor and 3D Model Viewer";
+		this.version = "0.1.5";
+		this.update = "Updated 02/15/2015";		
+		this.site = "http://photo.blob.software/";
+		this.copy = "© 2015 Vincent Costanza";
+		
+		// Site link
+		this.link = new HyperLink(400, 22, this.site);
+		
+		this.children = [this.link];
+	},
+	def: function() {
+	},
+	apply: function() {
+	},
+	detect: function(x, y, type) {
+		
+		this.link.detect(x, y, type);
+		
+		this._super(x, y, type);
+	},
+	draw: function(ctx) {
+		ctx.save();
+		
+		// Adjust hyperlink
+		ctx.font = "18px "+F1;
+		var w = ctx.measureText(this.site).width;
+		this.link.w = w;
+		this.link.set(this.x+((this.w-w)/2), this.y+155);
+		
+		// Drawing begins here
+		this._super(ctx);
+		
+		ctx.translate(this.x, this.y);
+		
+		// Logo
+		ctx.drawImage(this.logo, (this.w-64)/2, 10, 64, 52);
+		
+		// Name and version
+		ctx.fillStyle = C1;
+		ctx.font = "24px "+F1;
+		w = ctx.measureText(this.name+" "+this.version).width;
+		ctx.fillText(this.name+" "+this.version, (this.w-w)/2, 90, this.w);
+		
+		// Description
+		ctx.fillStyle = C3;
+		ctx.font = "16px "+F1;
+		w = ctx.measureText(this.desc).width;
+		ctx.fillText(this.desc, (this.w-w)/2, 115, this.w);
+		
+		// Update
+		ctx.fillStyle = C1;
+		w = ctx.measureText(this.update).width;
+		ctx.fillText(this.update, (this.w-w)/2, 150, this.w);
+		
+		// Copyright
+		ctx.fillStyle = C3;
+		w = ctx.measureText(this.copy).width;
+		ctx.fillText(this.copy, (this.w-w)/2, 210, this.w);
+	
+		ctx.restore();
+	}
+});
+
 // PBOX container
 PBOX = {
 		
 	New: new PBOX_New(),
+	Resize: new PBOX_Resize(),
 	ColorBox: new PBOX_ColorBox(),
 	FontBox: new PBOX_FontBox(),
 	Grayscale: new PBOX_Grayscale(),
@@ -976,6 +1169,7 @@ PBOX = {
 	ReplaceColor: new PBOX_ReplaceColor(),
 	ChooseTheme: new PBOX_ChooseTheme(),
 	ImageBrowser: new PBOX_ImageBrowser(),
+	About: new PBOX_About(),
 	
 	detect: function(x, y, type) {
 		

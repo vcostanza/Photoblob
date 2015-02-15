@@ -231,12 +231,14 @@ IMGFX = {
 			x = x1;
 			y = y1;
 		}
+		
+		//CL(t+" | "+x+" | "+y+" | "+dx+" | "+dy+" | "+yinc+" | "+p+" | "+twoDy+" | "+twoDyMinusDx);
 
 		// First point
 		if(t) buf[b] = [y+sx, x+sy]; else buf[b] = [x+sx, y+sy];
 		
 		// Increment
-		while(b < 1000 && x < x2) {
+		while(x < x2) {
 			x++;
 			
 			if(p < 0) {
@@ -248,8 +250,10 @@ IMGFX = {
 			
 			// Next point
 			if(t) buf[b] = [y+sx, x+sy]; else buf[b] = [x+sx, y+sy];
+			//CL(buf[b]);
 			b++;
 		}
+		
 		return buf;
 	},
 	
@@ -531,7 +535,7 @@ IMGFX = {
 		if(!IMGFX.target) return;
 		
 		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, img = IMGFX.GetTarget(),
-			w = img.w, h = img.h, fw = img.fw, o = img.o, dl = h*fw, min = 255, max = 0, t = 0, mind = null, maxd = null, px = 0, py = 0, i = 0, t1 = T();
+			w = img.w, h = img.h, fw = img.fw, o = img.o, dl = h*fw, min = 255, max = 0, t = 0, mind = 0, maxd = 0, px = 0, py = 0, i = 0, t1 = T();
 
 		// First find the brightest and darkest pixels based on average
 		while(py < dl) {
@@ -551,7 +555,7 @@ IMGFX = {
 				py += fw;
 			}
 		}
-		
+				
 		// Calculate normals off white/black
 		maxd = [d2[maxd]/255, d2[maxd+1]/255, d2[maxd+2]/255];
 		
@@ -1178,32 +1182,68 @@ IMGFX = {
 	Resize: function(new_w, new_h) {
 		if(!IMGFX.target) return;
 		
-		// Get the original width and height and also the width/height integer and decimal offsets
-		var w = IMGFX.tw, h = IMGFX.th, wr = w/new_w, hr = h/new_h, wi = CEIL(wr), hi = CEIL(hr), pw = w*4;
+		var last = IMGFX.GetHistory("last").img, w = last.width, h = last.height, t1 = T();
 		
+		if(new_w < 1) new_w = ROUND(w*new_w);
+		if(new_h < 1) new_h = ROUND(h*new_h);
+		
+		// Get the original width and height and also the width/height integer and decimal offsets
+		var pw = w*4, wr = w/new_w, hr = h/new_h, wi = CEIL(wr), wc = (wi*2)-1, hi = CEIL(hr), hc = (hi*2)-1, wstart = 4*(wi-1), hstart = pw*(hi-1), wchc = wc*hc;
+
 		// Create resized image container
 		ImageArea.img = GC(canvas).createImageData(new_w, new_h);
 		IMGFX.SetTarget(ImageArea.img);
 		
-		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, dl = new_w*new_h,
-			s = 0, e = 0, p = 0, i = 0, j = 0, k = 0, l = 0, t1 = T();
+		var d = IMGFX.td, d2 = last.data, dl = new_w*new_h*4, ar = 0, ag = 0, ab = 0, aa = 0, pnw = 0, s = 0, e = FLOOR(hr)*w*4, wht = 1/wchc, p, p1 = 0, k, j, o1 = 0, o2, px = 1, py = 0, i = 0;
 		
-		CL(wr);
-	
-		for(; j < dl; j++) {
+		for(i = 0; i < dl; i += 4) {
 			
-			i = j*4;
+			p = p1;
+			p1 = (FLOOR(px*wr)*4)+s;
 			
-			l = FLOOR(j/new_w);
-			
-			p = (FLOOR(wr*(j%new_w))+(w*FLOOR(hr*l)))*4;
+			o1 = 0;			
+			if(px != 0) {
+				for(j = p; j < p+((p1-p)*2); j += 4) {
+					ar = FLOOR(((ar*o1)+d2[j])/(o1+1));
+					ag = FLOOR(((ag*o1)+d2[j+1])/(o1+1));
+					ab = FLOOR(((ab*o1)+d2[j+2])/(o1+1));
+					aa = FLOOR(((aa*o1)+d2[j+3])/(o1+1));
+					
+					for(k = j+pw; k < j+(pw*2); k += pw) {
+						ar = FLOOR(((ar*o1)+d2[k])/(o1+1));
+						ag = FLOOR(((ag*o1)+d2[k+1])/(o1+1));
+						ab = FLOOR(((ab*o1)+d2[k+2])/(o1+1));
+						aa = FLOOR(((aa*o1)+d2[k+3])/(o1+1));
+						
+						o1++;
+					}
+					
+					o1++;
+				}
+			}
 			
 			// Resize without interpolation
-			d[i] = d2[p];
-			d[i+1] = d2[p+1];
-			d[i+2] = d2[p+2];
-			d[i+3] = d2[p+3];			
+			//~ d[i] = d2[p];
+			//~ d[i+1] = d2[p+1];
+			//~ d[i+2] = d2[p+2];
+			//~ d[i+3] = d2[p+3];
+				
+			// Interpolation
+			d[i] = ar;
+			d[i+1] = ag;
+			d[i+2] = ab;
+			d[i+3] = aa;
+			
+			px++;
+			if(px == new_w) {
+				px = 0;
+				py++;
+				s = e;
+				e = FLOOR(hr*(py+1))*pw;
+			}
 		}
+		
+		CL(o1);
 		
 		//CL("Resize("+new_w+", "+new_h+"): "+(T() - t1));
 		

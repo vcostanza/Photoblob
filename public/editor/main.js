@@ -455,12 +455,45 @@ Label = Box.extend({
 		this.size(w, h);
 		this.value = text;
 	},
-	detect: function(x, y, type) {
-	},
 	draw: function(ctx) {
 		
 		ctx.fillStyle = C1, ctx.font = (this.h-4)+"px "+F1;
 		ctx.fillText(this.value, this.x+4, this.y+this.h-4, this.w-8);
+		
+	}
+});
+
+/* Hyperlink */
+HyperLink = Label.extend({
+	init: function(w, h, text, href) {
+		this._super(w, h, text);
+		this.href = (href == null ? text : href);
+		this.active = false;
+	},
+	detect: function(x, y, type) {		
+		this.toggle(this._super(x, y, type));
+		
+		if(this.active) {			
+			// Open href in new tab
+			if(type == "click") {
+				window.open(this.href, "_blank");
+				window.focus();
+			}			
+			SC("pointer");
+		} else {
+			SC();
+		}
+	},
+	draw: function(ctx) {
+		
+		if(this.active) {
+			ctx.fillStyle = C1;
+			ctx.fillRect(this.x, this.y+this.h+1, this.w, 2);
+		} else {
+			ctx.fillStyle = C2;
+		}
+		ctx.font = (this.h-4)+"px "+F1;
+		ctx.fillText(this.value, this.x, this.y+this.h, this.w);
 		
 	}
 });
@@ -1336,7 +1369,7 @@ function DrawEditor() {
 	PBOX.draw(ctx);
 	
 	// DEBUG: draw this on top of everything
-	FrameNum.draw(ctx);
+	//FrameNum.draw(ctx);
 	
 	/*if(ImageArea.open) {
 		IMGFX.Fuzzify(FUZZAMT);

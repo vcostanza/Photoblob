@@ -413,6 +413,18 @@ function TypeDetect(event) {
 			f.ind = Clamp(f.ind+1, 0, v.length)
 			break;
 			
+		// Increment
+		case "up":
+		case "down":
+		case "arrowup":
+		case "arrowdown":
+			if(f.numOnly) {
+				var oldval_num = f.get();
+				f.value = Clamp(oldval_num + (k.toLowerCase() == "up" ? 1 : -1), f.min, f.max);
+				v = f.get(true);
+			}
+			break;
+			
 		// Unfocus text box
 		case "enter":
 			f.unfocus();
@@ -685,7 +697,7 @@ function Selection(x, y, w, h) {
 
 /* Return multiplier required to scale w, h to mw, mh */
 function GetScaleToFit(w, h, mw, mh) {
-	return w-mw > h-mh ? mw/w : mh/h;
+	return mw/w < mh/h ? mw/w : mh/h;
 }
 
 /* Clone image data */
@@ -869,7 +881,7 @@ function InitMenus() {
 					new MenuItem("Rotate", IMGFX.Rotate),
 					new MenuItem("Mirror", PBOX.Mirror, "open"),
 					new MenuItem("Shift", PBOX.Shift, "open"),
-					new MenuItem("Scale"),
+					new MenuItem("Resize", PBOX.Resize, "open"),
 					new MenuItem("Crop")
 				]));
 				break;
@@ -917,7 +929,7 @@ function InitMenus() {
 				MenuBar.items[m].setMenu(new Menu([
 					new MenuItem("Tutorial"),
 					new MenuItem("Manual"),
-					new MenuItem("About")
+					new MenuItem("About", PBOX.About, "open")
 				]));
 				break;
 			default:
