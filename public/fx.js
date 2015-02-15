@@ -665,6 +665,52 @@ IMGFX = {
 		return T()-t1;		
 	},
 	
+	/* Crop image */
+	Crop: function(x, y, w, h) {
+		if(!IMGFX.target) return;
+	
+		var sel = IMGFX.selection;
+	
+		if(x == undefined) {
+			if(!sel) return;
+			x = sel.x, y = sel.y, w = sel.w, h = sel.h;
+		}
+		
+		var old_w = IMGFX.tw;
+		
+		// Create resized image container
+		ImageArea.img = GC(canvas).createImageData(w, h);
+		IMGFX.SetTarget(ImageArea.img);
+		
+		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, dl = w*h*4, s = (x+(y*old_w))*4, p, w4 = w*4, pw = old_w*4, px = 0, py = 0, i = 0, t1 = T();
+		
+		for(; i < dl; i += 4) {
+			
+			p = s+px+py;
+			
+			d[i] = d2[p];
+			d[i+1] = d2[p+1];
+			d[i+2] = d2[p+2];
+			d[i+3] = d2[p+3];
+			
+			px += 4;
+			if(px == w4) {
+				px = 0;
+				py += pw;
+			}
+		}
+		
+		// Remove selection
+		if(sel) delete IMGFX.selection;
+		
+		Update();
+		IMGFX.AddHistory("Crop");
+		
+		//CL("Crop(): "+(T() - t1));
+		
+		return T()-t1;
+	},
+	
 	/* Shift pixels based on x and y offset
 	**
 	** x = 	amount of pixels to shift horizontally

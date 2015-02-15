@@ -326,7 +326,7 @@ function MouseDetect(event) {
 	
 	if(!PBOX.detect(x, y, type)) {
 		if(!MenuBar.detect(x, y, type)) {
-			Toolbox.detect(x, y, type);
+			ToolBox.detect(x, y, type);
 			HistoryBox.detect(x, y, type);		
 			EditArea.detect(x, y, type);
 		}
@@ -420,7 +420,7 @@ function TypeDetect(event) {
 		case "arrowdown":
 			if(f.numOnly) {
 				var oldval_num = f.get();
-				f.value = Clamp(oldval_num + (k.toLowerCase() == "up" ? 1 : -1), f.min, f.max);
+				f.value = Clamp(oldval_num + (k.toLowerCase().indexOf("up") > -1 ? 1 : -1), f.min, f.max);
 				v = f.get(true);
 			}
 			break;
@@ -882,7 +882,10 @@ function InitMenus() {
 					new MenuItem("Mirror", PBOX.Mirror, "open"),
 					new MenuItem("Shift", PBOX.Shift, "open"),
 					new MenuItem("Resize", PBOX.Resize, "open"),
-					new MenuItem("Crop")
+					new MenuItem("Crop", function() {
+						if(!IMGFX.selection) ToolBox.setTool(ToolBox.tools[1]);
+						else IMGFX.Crop();
+					})
 				]));
 				break;
 			case "Layer":
@@ -919,7 +922,7 @@ function InitMenus() {
 				break;
 			case "Window":
 				MenuBar.items[m].setMenu(new Menu([
-					new MenuItem("Toolbox"),
+					new MenuItem("Tool Box"),
 					new MenuItem("History"),
 					new MenuItem("Layers"),
 					new MenuItem("Themes", PBOX.ChooseTheme, "open")

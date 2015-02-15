@@ -172,17 +172,21 @@ PBOX_Resize = PBOX_Base.extend({
 		this.txt = [new TextBox(this, 80, 24, 128, 4, true, 1, 5000), new TextBox(this, 80, 24, 128, 4, true, 1, 5000)];
 		this.lbl = [new Label(80, 24, "Width:"), new Label(80, 24, "Height:")];
 		
-		this.link = new ImageButton(IMG("icons/link.svg"), 30, 30);
+		// Images for button
+		this.img_link = IMG("icons/link.svg");
+		this.img_unlink = IMG("icons/unlink.svg");
+		
+		this.link = new ImageButton(this.img_link, 30, 30);
 		this.linked = true;
 		
 		this.txt[0].onchange = function(o, n) {
 			if(this.parent.linked) this.parent.txt[1].value = ROUND((this.parent.txt[1].value/o)*n);
-			this.parent.apply();
+			this.parent.resize();
 		};
 		
 		this.txt[1].onchange = function(o, n) {
 			if(this.parent.linked) this.parent.txt[0].value = ROUND((this.parent.txt[0].value/o)*n);
-			this.parent.apply();
+			this.parent.resize();
 		};
 		
 		this.setChildren(this.txt, this.lbl, this.link);
@@ -191,8 +195,11 @@ PBOX_Resize = PBOX_Base.extend({
 		this.txt[0].value = IMGFX.tw;
 		this.txt[1].value = IMGFX.th;
 	},
-	apply: function() {
+	resize: function() {
 		IMGFX.Resize(this.txt[0].get(), this.txt[1].get());
+	},
+	apply: function() {
+		IMGFX.AddHistory("Resize");
 	},
 	detect: function(x, y, type) {
 		
@@ -203,61 +210,12 @@ PBOX_Resize = PBOX_Base.extend({
 			this.txt[i].detect(x, y, type);
 		}
 		
-	},
-	draw: function(ctx) {
-		ctx.save();
-		
-		for(var i = 0; i < this.txt.length; i++) {
-			this.lbl[i].set(this.x+15, this.y+15+(i*30));
-			this.txt[i].set(this.x+100, this.y+15+(i*30));
-		}
-		
-		this.link.set(this.x+180, this.y+26);
-		
-		// Drawing begins here
-		this._super(ctx);
-	
-		ctx.restore();
-	}
-});
-
-/* Resize window */
-PBOX_Crop = PBOX_Base.extend({
-	init: function() {
-		this._super("Crop", 220, 150);
-		
-		this.txt = [new TextBox(this, 80, 24, 128, 4, true, 1, 5000), new TextBox(this, 80, 24, 128, 4, true, 1, 5000)];
-		this.lbl = [new Label(80, 24, "Width:"), new Label(80, 24, "Height:")];
-		
-		this.link = new ImageButton(IMG("icons/link.svg"), 30, 30);
-		this.linked = true;
-		
-		this.txt[0].onchange = function(o, n) {
-			if(this.parent.linked) this.parent.txt[1].value = ROUND((this.parent.txt[1].value/o)*n);
-			this.parent.apply();
-		};
-		
-		this.txt[1].onchange = function(o, n) {
-			if(this.parent.linked) this.parent.txt[0].value = ROUND((this.parent.txt[0].value/o)*n);
-			this.parent.apply();
-		};
-		
-		this.setChildren(this.txt, this.lbl, this.link);
-	},
-	def: function() {
-		this.txt[0].value = IMGFX.tw;
-		this.txt[1].value = IMGFX.th;
-	},
-	apply: function() {
-		IMGFX.Resize(this.txt[0].get(), this.txt[1].get());
-	},
-	detect: function(x, y, type) {
-		
-		this._super(x, y, type);
-		
-		// Text boxes
-		for(var i = 0; i < this.txt.length; i++) {
-			this.txt[i].detect(x, y, type);
+		// Link button
+		if(type == "click" && this.link.detect(x, y, type)) {
+			if(this.linked) this.link.img = this.img_unlink;
+			else this.link.img = this.img_link;
+			this.linked = !this.linked;
+			Update();
 		}
 		
 	},

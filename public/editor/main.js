@@ -218,14 +218,7 @@ ImageButton = Button.extend({
 	init: function(img, w, h) {
 		this._super("");
 		this.size(w, h);
-		this.loadImage(img, 1);
-	},
-	loadImage: function(img, chances) {
-		if(img.complete) {
-			this.img = img;
-		} else if(chances < 10) {
-			img.onload = this.loadImage(img, chances+1);
-		}
+		this.img = img;
 	},
 	draw: function(ctx) {
 		
@@ -236,7 +229,7 @@ ImageButton = Button.extend({
 		
 		ctx.lineWidth = 4;
 		if(this.active) ctx.strokeStyle = BG6; else ctx.strokeStyle = BG5;
-		ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
+		if(this.img && this.img.complete) ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
 	}
 });
 
@@ -632,7 +625,7 @@ EditArea = {
 			return;
 		}
 	
-		if(Toolbox.get("Box Select") && ImageArea.open) {
+		if(ToolBox.get("Box Select") && ImageArea.open) {
 			if(type == "click") return;
 		
 			var s = this.selectArea;
@@ -666,7 +659,7 @@ EditArea = {
 				this.selecting = true;
 			}
 			SC("crosshair");
-		} else if(Toolbox.get("Color Pick")) {
+		} else if(ToolBox.get("Color Pick")) {
 			SC("crosshair");
 			if(type == "move") {
 				var ctx = GC(canvas), d = [];
@@ -680,26 +673,26 @@ EditArea = {
 				MainColors.setFG(d);
 				MainColors.drawInside(ctx);
 			} else if(type == "click") {
-				Toolbox.clear();
+				ToolBox.clear();
 				Update();
 			}
-		} else if(Toolbox.get("Brush") || Toolbox.get("Erase")) {
+		} else if(ToolBox.get("Brush") || ToolBox.get("Erase")) {
 			if(WB(x, y, ImageArea) && type == "down")
 				this.mouseDown = true;
 			if(this.mouseDown) {
 				if(type == "move") {
 					x -= ImageArea.x;
 					y -= ImageArea.y;
-					var bd = Toolbox.getData();
-					IMGFX.ApplyBrush(x, y, MainColors.fg, bd.brush[0], Toolbox.active.name == "Erase");
+					var bd = ToolBox.getData();
+					IMGFX.ApplyBrush(x, y, MainColors.fg, bd.brush[0], ToolBox.active.name == "Erase");
 					Update();
 				} else if(type == "up") {
 					this.mouseDown = false;
-					IMGFX.AddHistory(Toolbox.active.name);
+					IMGFX.AddHistory(ToolBox.active.name);
 					Update();
 				}
 			}
-		} else if(Toolbox.get("Fill")) {
+		} else if(ToolBox.get("Fill")) {
 			if(WB(x, y, ImageArea)) {
 				SC("crosshair");
 				if(type == "click") {
@@ -711,7 +704,7 @@ EditArea = {
 			} else {
 				SC();
 			}
-		} else if(Toolbox.get("Pen") && ImageArea.open) {
+		} else if(ToolBox.get("Pen") && ImageArea.open) {
 			var p = this.path, i = this.path_last*2, imx = ImageArea.x, imy = ImageArea.y;
 			
 			x -= imx;
@@ -946,8 +939,8 @@ MenuBar = {
 	}
 };
 
-/* Toolbox */
-Toolbox = {
+/* ToolBox */
+ToolBox = {
 	x: 0,
 	y: 40,
 	w: 75,
@@ -1072,7 +1065,7 @@ function Tool(name) {
 	},
 	this.icon = this.loadIcon(),
 	this.draw = function(ctx) {
-		Toolbox.highlight == this ? ctx.fillStyle = BG6 : ctx.fillStyle = BG5;
+		ToolBox.highlight == this ? ctx.fillStyle = BG6 : ctx.fillStyle = BG5;
 		ctx.fillRect(this.x, this.y, this.w, this.h);
 		if(this.icon && this.icon.loaded) {
 			ctx.drawImage(this.icon, this.x+3, this.y+3, this.w-6, this.h-6);
@@ -1145,9 +1138,9 @@ MainColors = {
 	
 	draw: function(ctx) {
 	
-		this.x = Toolbox.x;
-		this.y = Toolbox.y + (Toolbox.tools.length/2)*35;
-		this.w = Toolbox.w;
+		this.x = ToolBox.x;
+		this.y = ToolBox.y + (ToolBox.tools.length/2)*35;
+		this.w = ToolBox.w;
 		this.h = this.w;
 		
 		var x = this.x, y = this.y, w = this.w, h = this.h, cs = this.cs;
@@ -1358,7 +1351,7 @@ function DrawEditor() {
 	// This is the proper rendering order
 	// Screwing with this may draw things wrong
 	BG.draw(ctx);
-	Toolbox.draw(ctx);
+	ToolBox.draw(ctx);
 	EditArea.draw(ctx);
 	ImageArea.draw(ctx);
 	HistoryBox.draw(ctx);
