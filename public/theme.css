@@ -1,3 +1,15 @@
+@font-face {
+	font-family: 'Purisa';
+	src: url('Purisa.woff') format('woff'), /* Chrome 6+, Firefox 3.6+, IE 9+, Safari 5.1+ */
+		url('Purisa.ttf') format('truetype'); /* Chrome 4+, Firefox 3.5, Opera 10+, Safari 3—5 */
+}
+
+@font-face {
+	font-family: 'WhimsyTT';
+	src: url('WhimsyTT.woff') format('woff'), /* Chrome 6+, Firefox 3.6+, IE 9+, Safari 5.1+ */
+		url('WhimsyTT.ttf') format('truetype'); /* Chrome 4+, Firefox 3.5, Opera 10+, Safari 3—5 */
+}
+
 body {
 	background: url(bg.jpg) repeat #112;
 	color: #DD9;

@@ -480,8 +480,6 @@ HyperLink = Label.extend({
 				window.focus();
 			}			
 			SC("pointer");
-		} else {
-			SC();
 		}
 	},
 	draw: function(ctx) {

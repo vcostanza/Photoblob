@@ -1076,7 +1076,7 @@ PBOX_ImageBrowser = PBOX_Base.extend({
 /* About info */
 PBOX_About = PBOX_Base.extend({
 	init: function() {
-		this._super("About Photoblob", 420, 225, true);
+		this._super("About Photoblob", 420, 245, true);
 		
 		// Remove all children elements
 		delete this.b_apply;
@@ -1096,7 +1096,10 @@ PBOX_About = PBOX_Base.extend({
 		// Site link
 		this.link = new HyperLink(400, 22, this.site);
 		
-		this.children = [this.link];
+		// License link
+		this.license = new HyperLink(100, 20, "Licensed under GPLv3", this.site+"LICENSE");
+		
+		this.children = [this.link, this.license];
 	},
 	def: function() {
 	},
@@ -1104,18 +1107,26 @@ PBOX_About = PBOX_Base.extend({
 	},
 	detect: function(x, y, type) {
 		
+		SC();
+		
 		this.link.detect(x, y, type);
+		this.license.detect(x, y, type);
 		
 		this._super(x, y, type);
 	},
 	draw: function(ctx) {
 		ctx.save();
 		
-		// Adjust hyperlink
+		// Adjust hyperlinks
 		ctx.font = "18px "+F1;
 		var w = ctx.measureText(this.site).width;
 		this.link.w = w;
-		this.link.set(this.x+((this.w-w)/2), this.y+155);
+		this.link.set(this.x+((this.w-w)/2), this.y+157);
+		
+		ctx.font = "16px "+F1;
+		w = ctx.measureText(this.license.value).width;
+		this.license.w = w;
+		this.license.set(this.x+((this.w-w)/2), this.y+210);
 		
 		// Drawing begins here
 		this._super(ctx);
@@ -1131,21 +1142,24 @@ PBOX_About = PBOX_Base.extend({
 		w = ctx.measureText(this.name+" "+this.version).width;
 		ctx.fillText(this.name+" "+this.version, (this.w-w)/2, 90, this.w);
 		
+		// Update
+		w = ctx.measureText(this.update).width;
+		ctx.fillText(this.update, (this.w-w)/2, 152, this.w);
+		
 		// Description
 		ctx.fillStyle = C3;
 		ctx.font = "16px "+F1;
 		w = ctx.measureText(this.desc).width;
 		ctx.fillText(this.desc, (this.w-w)/2, 115, this.w);
 		
-		// Update
-		ctx.fillStyle = C1;
-		w = ctx.measureText(this.update).width;
-		ctx.fillText(this.update, (this.w-w)/2, 150, this.w);
-		
 		// Copyright
-		ctx.fillStyle = C3;
 		w = ctx.measureText(this.copy).width;
 		ctx.fillText(this.copy, (this.w-w)/2, 210, this.w);
+		
+		// Separators
+		ctx.fillStyle = BG4;
+		ctx.fillRect(10, 122, this.w-20, 3);
+		ctx.fillRect(50, 188, this.w-100, 3);
 	
 		ctx.restore();
 	}

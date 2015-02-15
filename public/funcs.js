@@ -1008,7 +1008,7 @@ function SetTheme(num) {
 		BG4C = "#5D3B5D", BG5 = "#646", BG6 = "#757", BG7 = "#868"; break;
 		
 		// Delaware theme / Eye strain!
-		case 15: F1 = "Whimsy TT", C1 = "#6FF", C2 = "#3DD", C3 = "#0AA",
+		case 15: F1 = "WhimsyTT", C1 = "#6FF", C2 = "#3DD", C3 = "#0AA",
 		BG1 = "#440", BG2 = "#550", BG3 = "#660", BG4 = "#771", BG4C = "#727216",
 		BG5 = "#882", BG6 = "#993", BG7 = "#AA4", GRY = "#388"; break;
 		
