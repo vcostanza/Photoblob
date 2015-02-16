@@ -61,3 +61,8 @@ body {
 form {
 	display: none;
 }
+
+canvas.gl {
+	position: absolute;
+	pointer-events: none;
+}

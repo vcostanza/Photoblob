@@ -272,7 +272,7 @@ function StartEditor() {
 	//var t = T();
 	
 	// Load editor scripts
-	LoadScripts(["fx.js", "editor/main.js", "editor/pbox.js"], function() {
+	LoadScripts(["fx.js", "three.min.js", "editor/main.js", "editor/pbox.js"], function() {
 		
 		//CL("Loaded scripts in "+(T()-t)/1000+" seconds.");
 		
@@ -747,7 +747,7 @@ function OpenDialog() {
 
 /* Open image in editor */
 function OpenImage(src, name) {
-	CloseImage();	
+	CloseImage();
 	var img = IMG(src);
 	ImageArea.open = true;
 	ImageArea.tempimg = img;
@@ -915,6 +915,7 @@ function InitMenus() {
 				break;
 			case "View":
 				MenuBar.items[m].setMenu(new Menu([
+					new MenuItem("3D View", PBOX.View3D, "open"),
 					new MenuItem("Zoom In"),
 					new MenuItem("Zoom Out"),
 					new MenuItem("Fullscreen", TFS)

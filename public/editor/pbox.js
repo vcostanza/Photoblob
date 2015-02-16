@@ -280,7 +280,7 @@ PBOX_ColorBox = PBOX_Base.extend({
 		this.cb[0].grad = [];
 		for(; i <= 10; i++) {
 			this.cb[0].grad[i] = HSL2RGB(i*0.1, 1, 0.5).concat(255);	// Calculate hue gradient
-			if(!noBarUpdate && i < 3) this.cb[i].value = this.hsla[i];	// While we're here, update color box values
+			if(!noBarUpdate && i < 3) this.cb[i].value = this.hsla[i];	// While I'm here, update color box values
 		}
 		
 		if(!noBarUpdate) this.cb[3].value = this.hsla[3]/255;
@@ -317,7 +317,7 @@ PBOX_ColorBox = PBOX_Base.extend({
 		}
 	},
 	apply: function() {
-		// Callback when we're done
+		// Callback when it's done
 		if(this.callback) this.callback.call(this.callobj, HSL2RGB(this.hsla[0], this.hsla[1], this.hsla[2]).concat(this.hsla[3]));
 	},
 	cancel: function() {
@@ -856,6 +856,121 @@ PBOX_ReplaceColor = PBOX_Base.extend({
 	}
 });
 
+/* Three.JS 3D Texture Preview */
+PBOX_View3D = PBOX_Base.extend({
+	init: function() {
+		this._super("Three.js 3D Texture Preview", 420, 420);
+		
+		// Moving the model with the mouse
+		this.down = false;		// Mouse down
+		this.held = [0, 0];		// Position where clicked
+		this.meshrot = [0, 0];	// Mesh rotation before clicking down
+		
+		// No children needed here
+		delete this.b_apply;
+		delete this.b_cancel;		
+		this.children = [];
+		
+		// Generic scene
+		this.scene = new THREE.Scene();
+		this.camera = new THREE.PerspectiveCamera(75, 1, 1, 10000);
+		this.camera.position.z = 300;
+
+		var r = this.renderer = new THREE.WebGLRenderer(canvas), rd = r.domElement;
+		r.setSize(0, 0);		
+		rd.className = "gl";
+		document.getElementById("transparency").appendChild(rd);		
+		D(rd, false);
+	},
+	def: function() {
+		
+		// I can't (as far as I know) send raw image data directly to a texture
+		// So I have to convert it to a data url first		
+		var r = this.renderer, rd = r.domElement, can = document.createElement("canvas");
+		can.width = ImageArea.w;
+		can.height = ImageArea.h;
+		GC(can).putImageData(ImageArea.img, 0, 0);
+			
+		// Then load the texture that way
+		var texture = new THREE.ImageUtils.loadTexture(can.toDataURL("image/png"));
+		
+		// Create mesh if it doesn't exist, otherwise just update the map
+		if(!this.mesh) {	
+			this.material = new THREE.MeshBasicMaterial({ map: texture });
+			this.mesh = new THREE.Mesh(new THREE.BoxGeometry(200, 200, 200), this.material);
+			this.scene.add(this.mesh);
+		} else {
+			this.material.map = texture;
+		}
+		this.material.needsUpdate = true;
+		
+		// Set up/expand renderer
+		r.setSize(400, 400);
+		r.setClearColor(BG2);
+		rd.style.left = (this.x+20)+"px";
+		rd.style.top = (this.y+20)+"px";
+		D(rd, true);
+		
+		// The texture doesn't get updated automatically unless I wait a bit
+		setTimeout(Update, 20);
+	},
+	close: function(applied) {
+		D(this.renderer.domElement, false);
+		this.active = false;
+		Update();
+	},
+	detect: function(x, y, type) {
+		if(type == "down" && WC(x, y, this.x+10, this.y+10, 400, 400)) {
+			this.meshrot = [this.mesh.rotation.y, this.mesh.rotation.x];
+			this.held = [x, y];
+			this.down = true;
+		} else if(type == "up") {
+			this.down = false;
+		} else if(type == "move" && this.down) {
+			this.mesh.rotation.y = this.meshrot[0]-(this.held[0]-x)/100;
+			this.mesh.rotation.x = this.meshrot[1]-(this.held[1]-y)/100;
+			Update();
+		}
+	},
+	draw: function(ctx) {
+		ctx.save();
+		
+		var r = this.renderer, rd = r.domElement, rx = this.x+16, ry = this.y+16, rw = 400, rh = 400;
+		
+		// Clamp render size
+		if(rx-6 < 0) {
+			rw += rx-6;
+			rx = 6;
+		} else if(rx+rw-6 > canvas.width) {
+			rw += canvas.width-(rx+rw-6);
+		}
+		
+		if(ry-6 < 0) {
+			rh += ry-6;
+			ry = 6;
+		} else if(ry+rh-6 > canvas.height) {
+			rh += canvas.height-(ry+rh-6);
+		}
+		
+		r.setSize(rw, rh);
+		r.setViewport(0, 0, rw, rh);
+		
+		rd.style.left = rx+"px";
+		rd.style.top = ry+"px";
+		
+		// Drawing begins here
+		this._super(ctx);
+		
+		r.render(this.scene, this.camera);
+		
+		ctx.fillStyle = C1;
+		ctx.font = "24px "+F1;
+		ctx.fillText("Much more to come...", this.x+50, this.y+30, this.w);
+	
+		ctx.restore();
+	}
+});
+
 /* Theme chooser */
 PBOX_ChooseTheme = PBOX_Base.extend({
 	init: function() {
@@ -1139,6 +1254,7 @@ PBOX = {
 	Shift: new PBOX_Shift(),
 	ChangeHSL: new PBOX_ChangeHSL(),
 	ReplaceColor: new PBOX_ReplaceColor(),
+	View3D: new PBOX_View3D(),
 	ChooseTheme: new PBOX_ChooseTheme(),
 	ImageBrowser: new PBOX_ImageBrowser(),
 	About: new PBOX_About(),

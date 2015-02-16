@@ -1360,7 +1360,7 @@ function DrawEditor() {
 	PBOX.draw(ctx);
 	
 	// DEBUG: draw this on top of everything
-	//FrameNum.draw(ctx);
+	FrameNum.draw(ctx);
 	
 	/*if(ImageArea.open) {
 		IMGFX.Fuzzify(FUZZAMT);

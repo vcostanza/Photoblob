@@ -170,8 +170,8 @@ IMGFX = {
 				}
 			}
 			
-			// We need to convert the image data to a real image or else
-			// the alpha doesn't blend when we draw the selection
+			// I need to convert the image data to an image object or else
+			// the alpha doesn't blend when the selection is drawn
 			var selcan = document.createElement("canvas");
 			selcan.width = s.w;
 			selcan.height = s.h;
@@ -209,16 +209,16 @@ IMGFX = {
 		y2 -= y1;
 		x1 = y1 = 0;
 		
-		// Switch before we do anything
+		// Switch before I do anything
 		if(ABS(x2-x1) < ABS(y2-x1)) {
 			t = y2;
 			y2 = x2;
 			x2 = t;
-			t = true;	// We know to switch x and y when plotting
+			t = true;	// Switch x and y when plotting
 		}
 		
 		// The usual stuff
-		// Added: 'yinc' so we know whether to increment or decrement
+		// Added: 'yinc' so I know whether to increment or decrement
 		// Added: 'buf' for the pixel buffer that gets returned
 		var dx = ABS(x2-x1), dy = ABS(y2-x1), yinc = (x2 > x1 ? (y1 > y2 ? -1 : 1) : (y1 > y2 ? 1 : -1)), p = 2*dy-dx, twoDy = 2*dy, twoDyMinusDx = 2*(dy-dx), buf = [], x = 0, y = 0, b = 0;
 
@@ -392,7 +392,7 @@ IMGFX = {
 			// By the way, this example simply syncs the current image with the last saved history data
 			// Most of the time this shouldn't change anything
 			
-			// Increment X offset and reset if we're on a new line, also increment Y offset
+			// Increment X offset and reset if I'm on a new line, also increment Y offset
 			// Incrementation should almost always look like this
 			px++;
 			if(px == w) {
