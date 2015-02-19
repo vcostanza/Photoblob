@@ -487,12 +487,16 @@ PBOX_Grayscale = PBOX_Base.extend({
 		new RadioButton("Red Channel"), new RadioButton("Green Channel"), new RadioButton("Blue Channel"),
 		new RadioButton("Luma (SDTV)"), new RadioButton("Luma (HDTV)"), new RadioButton("Luma (UHDTV)")];
 		
+		// Radio button value
+		this.rb_val = 0;
+		
 		this.setChildren(this.rb);
 	},
 	def: function() {
 		for(var e in this.rb) this.rb[e].toggle(false);
 		this.rb[0].toggle(true);
 		IMGFX.Grayscale(0);
+		this.rb_val = 0;
 	},
 	apply: function() {
 		IMGFX.AddHistory("Grayscale");
@@ -500,18 +504,16 @@ PBOX_Grayscale = PBOX_Base.extend({
 	detect: function(x, y, type) {
 		
 		// Radio buttons
-		if(type == "click") {
-			var mode = -1;
-			
+		if(type == "click") {			
 			for(var i = 0; i < this.rb.length; i++) {
-				if(mode == -1 && this.rb[i].active || this.rb[i].detect(x, y, type)) mode = i;
+				if(this.rb[i].detect(x, y, type)) {
+					this.rb_val = i;
+					IMGFX.Grayscale(i);
+				}
 				this.rb[i].toggle(false);
 			}
 			
-			if(mode == -1) mode = 0;
-			
-			this.rb[mode].toggle(true);
-			IMGFX.Grayscale(mode);		
+			this.rb[this.rb_val].toggle(true);
 		}
 		
 		this._super(x, y, type);		
@@ -1047,12 +1049,16 @@ PBOX_ChooseTheme = PBOX_Base.extend({
 		new RadioButton("Deep Green"), new RadioButton("Deep Red"), new RadioButton("Deep Yellow"), new RadioButton("Deep Cyan"),
 		new RadioButton("Deep Pink"), new RadioButton("Dela"), new RadioButton("High Contrast"), new RadioButton("Black")];
 		
+		// Radio button value
+		this.rb_val = 0;
+		
 		this.setChildren(this.rb);
 	},
 	last: 0,
 	def: function() {
 		this.last = CurrentTheme;
-		this.rb[CurrentTheme].toggle(true);
+		this.rb_val = CurrentTheme;
+		this.rb[this.rb_val].toggle(true);
 	},
 	apply: function() {
 		this.last = CurrentTheme;
@@ -1064,17 +1070,15 @@ PBOX_ChooseTheme = PBOX_Base.extend({
 		
 		if(type == "click") {		
 			// Radio buttons
-			var mode = -1;
-			
 			for(var i = 0; i < this.rb.length; i++) {
-				if(mode == -1 && this.rb[i].active || this.rb[i].detect(x, y, type)) mode = i;
+				if(this.rb[i].detect(x, y, type)) {
+					this.rb_val = i;
+					SetTheme(i);
+				}
 				this.rb[i].toggle(false);
 			}
 			
-			if(mode == -1) mode = 0;
-			
-			this.rb[mode].toggle(true);
-			SetTheme(mode);			
+			this.rb[this.rb_val].toggle(true);
 		}
 		
 		this._super(x, y, type);
@@ -1219,6 +1223,129 @@ PBOX_ImageBrowser = PBOX_Base.extend({
 	}
 });
 
+/* View/change hotkeys */
+PBOX_Hotkeys = PBOX_Base.extend({
+	init: function() {
+		
+		this._super("Hotkeys", 240, 70, true);
+		
+		this.children = [];
+		
+		this.b_apply.setText("Done");
+		this.b_def = new Button("Defaults");
+		
+		delete this.b_cancel;
+		
+		// Keep track of input
+		this.input = null;
+		
+		this.btn = new Array();
+		this.lbl = new Array();
+		
+		this.setChildren(this.b_apply, this.b_def, this.lbl, this.btn);
+	},
+	sync: function() {
+		// Sync hotkey data
+		var i, j, c = 0, found;
+		for(i in HK.funcs) {
+			
+			if(!this.lbl[c]) this.lbl[c] = new Label(200, 26, HK.funcs[i].name);
+			if(!this.btn[c]) this.btn[c] = new Button("none");
+			
+			// Save this so we can easily get hotkey data
+			this.lbl[c].func = i;
+			
+			// Set to empty if not found
+			found = false;
+			for(j in HK.keys) {
+				if(HK.funcs[i].func == HK.keys[j].func) {
+					this.btn[c].setText(j);
+					found = true;
+					break;
+				}
+			}
+			if(!found) this.btn[c].setText("none");
+			c++;
+		}
+		this.h = 70+(c*32);
+		this.fixWidth();
+	},
+	fixWidth: function() {
+		// Fix window size when button length changes
+		var i = 0, max_w = 0;
+		for(var i = 0; i < this.btn.length; i++) {
+			if(this.btn[i].w > max_w) max_w = this.btn[i].w;
+		}
+		this.w = 240+max_w;
+	},
+	def: function() {
+		this.sync();
+	},
+	apply: function() {
+	},
+	detect: function(x, y, type) {
+		
+		// Detect hotkey input
+		for(var i = 0; i < this.btn.length; i++) {
+			if(this.btn[i].detect(x, y, type) && type == "click" && this.input == null) {
+				this.input = i;
+				this.btn[i].setText("Enter hotkey");
+				this.btn[i].toggle(false);
+				this.fixWidth();
+				LockKeyboard = true;	// Prevents all keyboard input
+			}
+			
+			// Tooltip for labels
+			if(type == "move" && this.lbl[i].detect(x, y, type)) {
+				Tooltip.set(HK.funcs[this.lbl[i].func].desc, x, y);
+			}
+		}
+		
+		// Restore default hotkeys
+		if(this.b_def.detect(x, y, type) && type == "click") {
+			DefaultHotkeys();
+			this.sync();
+		}
+		
+		this._super(x, y, type);
+	},
+	draw: function(ctx) {
+		ctx.save();
+		
+		var i = 0;
+		
+		for(; i < this.lbl.length; i++) {
+			this.lbl[i].set(this.x+15, this.y+15+(i*32));
+			this.btn[i].set(this.x+220, this.y+15+(i*32));
+		}
+		
+		this.b_def.set(this.x+this.w-this.b_def.w-10, this.y+this.h-this.b_def.h-10);
+		
+		// Update hotkey input
+		if(this.input != null && HK.tempKey != "") {
+			this.btn[this.input].setText(HK.tempKey);	// Input is stored in HK temp buffer
+			this.fixWidth();
+			
+			// Input done
+			if(!LockKeyboard) {
+				
+				var func = this.lbl[this.input].func;
+					
+				if(func) SetHotkey(HK.tempKey, this.lbl[this.input].func);
+				this.btn[this.input].toggle(true);
+				HK.tempKey = "";	// Always clear the temp buffer when done!
+				this.input = null;
+				this.sync();
+			}
+		}
+		
+		// Drawing begins here
+		this._super(ctx);
+	
+		ctx.restore();
+	}
+});
+
 /* About info */
 PBOX_About = PBOX_Base.extend({
 	init: function() {
@@ -1235,7 +1362,7 @@ PBOX_About = PBOX_Base.extend({
 		this.name = "Photoblob";
 		this.desc = "Image/Texture Editor and 3D Model Viewer";
 		this.version = "0.1.7";
-		this.update = "Updated 02/18/2015";		
+		this.update = "Updated 02/19/2015";		
 		this.site = "http://photo.blob.software/";
 		this.copy = "© 2015 Vincent Costanza";
 		
@@ -1328,6 +1455,7 @@ PBOX = {
 	View3D: new PBOX_View3D(),
 	ChooseTheme: new PBOX_ChooseTheme(),
 	ImageBrowser: new PBOX_ImageBrowser(),
+	Hotkeys: new PBOX_Hotkeys(),
 	About: new PBOX_About(),
 	
 	detect: function(x, y, type) {
@@ -1352,7 +1480,10 @@ PBOX = {
 					}
 				
 					// X button
-					if(type == "click" && ((t.x+t.w)-x) >= 0 && ((t.x+t.w)-x) <= 30) t.close();
+					if(((t.x+t.w)-x) >= 0 && ((t.x+t.w)-x) <= 30) {
+						SC("pointer");
+						if(type == "click") t.close();
+					}
 					
 				}
 				

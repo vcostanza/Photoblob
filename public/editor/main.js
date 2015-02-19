@@ -172,7 +172,7 @@ Button = Box.extend({
 	init: function(text) {
 		this._super();
 		this.setText(text);
-		this.highlight = false;
+		this.state = 0;
 		this.active = true;
 	},
 	setText: function(text) {
@@ -183,15 +183,23 @@ Button = Box.extend({
 	},
 	detect: function(x, y, type) {
 		if(this.active && WB(x, y, this)) {
-			if(type == "click") return true;
-			else if(type == "move") {
-				if(!this.highlight) {
-					this.highlight = true;
+			if(type == "click") {
+				this.state = 0;
+				Update();
+				return true;
+			} else if(type == "down") {
+				if(this.state != 2) {
+					this.state = 2;
+					Update();
+				}
+			} else if(type == "move") {
+				if(this.state == 0) {
+					this.state = 1;
 					Update();
 				}
 			}
-		} else if(this.highlight) {
-			this.highlight = false;
+		} else if(this.state != 0) {
+			this.state = 0;
 			Update();
 		}
 		return false;
@@ -200,7 +208,8 @@ Button = Box.extend({
 		
 		ctx.font = "18px "+F1;
 		
-		if(this.highlight && this.active) ctx.fillStyle = BG6;
+		if(this.state == 1 && this.active) ctx.fillStyle = BG6;
+		else if(this.state == 2) ctx.fillStyle = BG4;
 		else ctx.fillStyle = BG5;
 		
 		ctx.lineWidth = 4;
@@ -470,12 +479,14 @@ HyperLink = Label.extend({
 	detect: function(x, y, type) {		
 		this.toggle(this._super(x, y, type));
 		
-		if(this.active) {			
+		if(this.active) {	
 			// Open href in new tab
 			if(type == "click") {
 				window.open(this.href, "_blank");
 				window.focus();
-			}			
+			} else if(type == "move") {
+				Tooltip.set(this.href, x, y);
+			}
 			SC("pointer");
 		}
 	},
@@ -605,6 +616,61 @@ FrameNum = {
 		ctx.font = "18px "+F1;
 		ctx.fillStyle = C1;
 		ctx.fillText("F: "+Frame, canvas.width-ctx.measureText("F: "+Frame).width-10, 23);
+	}
+};
+
+/* Tooltip */
+Tooltip = {
+	set: function(text, x, y) {
+		
+		var t = this;	// 'this' doesn't work within the timeout
+		
+		t.lastCall = T();
+		if(t.active) {
+			t.active = false;
+			Update();
+		}
+		
+		// Reset wait
+		if(t.timeout) clearTimeout(t.timeout);
+			
+		t.timeout = setTimeout(function() {
+			if(MouseX == x && MouseY == y) {
+				t.text = text;
+				t.x = x;
+				t.y = y+32;
+				t.active = true;
+				t.lastCall = T();
+				t.timeout = null;
+				Update();
+			}
+		}, 1000);
+	},
+	draw: function(ctx) {
+		
+		if(T()-this.lastCall > 5000) this.active = false;
+		
+		if(this.active) {		
+			ctx.save();
+			
+			var h = 26;
+			
+			ctx.font = (h-12)+"px "+F1;
+			
+			var w = ctx.measureText(this.text).width+8, x = this.x-(w/2), y = this.y-(h/2);
+			
+			ctx.fillStyle = BG2;
+			ctx.fillRect(x, y, w, h);
+			
+			ctx.fillStyle = C2;
+			ctx.fillText(this.text, x+4, y+(h-2)-5, w);
+			
+			ctx.strokeStyle = BG4;
+			ctx.lineWidth = 2;
+			ctx.strokeRect(x, y, w, h);
+			
+			ctx.restore();
+		}
 	}
 };
 
@@ -1354,9 +1420,10 @@ function DrawEditor() {
 	LayersBox.draw(ctx);
 	MenuBar.draw(ctx);
 	PBOX.draw(ctx);
+	Tooltip.draw(ctx);
 	
 	// DEBUG: draw this on top of everything
-	//FrameNum.draw(ctx);
+	FrameNum.draw(ctx);
 	
 	/*if(ImageArea.open) {
 		IMGFX.Fuzzify(FUZZAMT);

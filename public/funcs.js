@@ -25,6 +25,8 @@ GRY = "#666";
 CurrentTheme = 0;
 
 /* Drawing update vars */
+MouseX = 0;
+MouseY = 0;
 LastUpdate = 0;
 Frame = 0;
 Icons = [];
@@ -32,6 +34,9 @@ FocusObj = undefined;
 
 // Fullscreen state
 InFullscreen = false;
+
+// Used for assigning hotkeys
+LockKeyboard = false;
 
 // Node server IP
 // Should be left blank if node server is hosted on same server as this site
@@ -201,10 +206,12 @@ function ReadFiles(e) {
 	
 	if(!f) return;
 	
+	// Load base64 image
 	reader.onload = function(e) {
 		OpenImage(e.target.result, e.target.fileName);
 	}
-   
+	
+	// Read form data
 	for(; i < f.length; i++) {
 		if(f[i].type.match(/image.*/)) {
 			form.append('uploads', f[i], f[i].name);
@@ -212,6 +219,8 @@ function ReadFiles(e) {
 			reader.readAsDataURL(f[i]);
 		}
 	}
+	
+	/* Automatic reverse image search */
 	
 	/*var xhr = new XMLHttpRequest();
 	xhr.open('POST', NODE_SERVER+'/upload', true);
@@ -276,7 +285,7 @@ function StartEditor() {
 	//var t = T();
 	
 	// Load editor scripts
-	LoadScripts(["fx.js", "three.min.js", "editor/main.js", "editor/pbox.js"], function(progress) {
+	LoadScripts(["fx.js", "three.min.js", "editor/hotkeys.js", "editor/main.js", "editor/pbox.js"], function(progress) {
 		
 		// Done
 		if(progress == 100) {		
@@ -333,6 +342,9 @@ function MouseDetect(event) {
 	var x = FLOOR(event.clientX-t.getBoundingClientRect().left);
 	var y = FLOOR(event.clientY-t.getBoundingClientRect().top);
 	
+	MouseX = x;
+	MouseY = y;
+	
 	// Clear cursor - I should never need to call this anywhere else
 	SC();
 	
@@ -357,9 +369,9 @@ function MouseDetect(event) {
 
 /* Detect keyboard events */
 function Hotkeys(event) {
-	var ct = event.ctrlKey, k = event.key ? event.key.toLowerCase() : String.fromCharCode(event.charCode+(ct?96:0)).toLowerCase(), sh = event.shiftKey, alt = event.altKey, hk = false, u = false;
+	var ct = event.ctrlKey, k = event.key ? event.key.toLowerCase() : String.fromCharCode(event.charCode+(ct?96:0)).toLowerCase(), sh = event.shiftKey, alt = event.altKey, hk = false;
 	
-	// Non-alphanumeric keys
+	// Non-alphanumeric keys (legacy only)
 	if(event.key == null && event.charCode == 0) {
 		
 		var kc = event.keyCode;
@@ -372,6 +384,13 @@ function Hotkeys(event) {
 		
 		switch(event.keyCode) {
 			case 8: k = "backspace"; break;
+			case 9: k = "tab"; break;
+			case 12: k = "unidentified"; break;
+			case 16:
+			case 17:
+			case 18: k = ""; break;
+			case 19: k = "pause"; break;
+			case 20: k = "capslock"; break;
 			case 27: k = "escape"; break;
 			case 33: k = "pageup"; break;
 			case 34: k = "pagedown"; break;
@@ -383,42 +402,41 @@ function Hotkeys(event) {
 			case 40: k = "arrowdown"; break;
 			case 45: k = "insert"; break;
 			case 46: k = "delete"; break;
+			case 92: k = "os"; break;
+			case 144: k = "numlock"; break;
+			case 145: k = "scrolllock"; break;
 		}
-		if(k != null) CL(k); else CL(event.keyCode);
+		//if(k != null) CL(k); else CL(event.keyCode);
 	}
 	
-	if(ct) {
-		hk = u = true;	
-		switch(k) {
+	// Hide modifier keys
+	if(k == "control" || k == "shift" || k == "alt") k = "";
+	
+	// Set up hotkey string for reading
+	var hkStr = (ct?"ctrl+":"") + (alt?"alt+":"") + (sh?"shift+":"") + k;
+	
+	// Read hotkey input
+	if(LockKeyboard) {
 		
-			case 'i': IMGFX.InvertColors();
-						IMGFX.AddHistory("Invert Colors");
-						break;
-						
-			case 'r': IMGFX.LoadHistory(0, true);
-						break;
-						
-			case 'w': CloseImage();
-						u = false;
-						break;
-						
-			case 'z': if(sh) IMGFX.Redo(); else IMGFX.Undo();
-						u = false;
-						break;
-						
-			case 'a': IMGFX.AutoContrast();
-						IMGFX.AddHistory("Auto Contrast");
-						break;
-						
-			case 'q': CL("Blocked quit hotkey!");
-						break;
-						
-			default: hk = u = false; break;			
-		}
+		// Only unlock keyboard when a valid key is pressed
+		if(k != null && k != "") LockKeyboard = false;
+		
+		HK.tempKey = hkStr;
+		Update();
+		event.preventDefault();
+		event.stopPropagation();
+		return;
 	}
 	
-	// Update canvas
-	if(u) Update();
+	// Read from Hotkeys container
+	if(HK.keys[hkStr]) {
+		
+		// If typing within a text box, ignore non-modifier hotkeys
+		if(!(FocusObj && !ct && !alt && !sh)) {
+			hk = true;
+			HK.keys[hkStr].func();
+		}		
+	}
 	
 	if(hk) {
 		event.preventDefault();
@@ -431,7 +449,7 @@ function Hotkeys(event) {
 /* Detect regular typing */
 function TypeDetect(event, k) {
 	
-	if(!FocusObj || FocusObj.value == undefined) return;
+	if(!FocusObj) return;
 	
 	var f = FocusObj, v = f.get(true), oldval = v;
 	
@@ -970,9 +988,7 @@ function InitMenus() {
 				break;
 			case "Window":
 				MenuBar.items[m].setMenu(new Menu([
-					new MenuItem("Tool Box"),
-					new MenuItem("History"),
-					new MenuItem("Layers"),
+					new MenuItem("Hotkeys", PBOX.Hotkeys, "open"),
 					new MenuItem("Themes", PBOX.ChooseTheme, "open")
 				]));
 				break;
