@@ -12,6 +12,6 @@ app.get('/', function(req, res) {
 });
 
 // Start server
-app.listen(3000, /*"150.156.215.211"*/, function(){
+app.listen(3000, /*"150.156.215.211", */function(){
 	CL("Working on port 3000");
 });

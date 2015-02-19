@@ -170,16 +170,18 @@ function LoadScripts(src, cb) {
 	
 	var j = 0, scr = null,
 	nextScript = function(i) {
+		
+		if(j >= src.length) return;
+		
 		scr = document.createElement('script');
 		scr.src = src[i];
 		scr.type = "text/javascript";
 		scr.setAttribute("async", "true");
 		
-		if(i < src.length-1) {
-			scr.onload = function(){nextScript(++j);}
-		} else {
-			if(cb) scr.onload = cb;
-		}
+		scr.onload = function(){
+			if(cb) cb(FLOOR(++j*(1/src.length)*100));
+			nextScript(j);
+		};
 		
 		document.body.appendChild(scr);	
 	};
@@ -259,6 +261,8 @@ function ReadFiles(e) {
 
 /* Start up the editor */
 function StartEditor() {
+	
+	document.title = "Photoblob - Loading...";
 
 	ALPHA_BG = IMG("alpha.png");
 	canvas = E("editor");
@@ -272,31 +276,46 @@ function StartEditor() {
 	//var t = T();
 	
 	// Load editor scripts
-	LoadScripts(["fx.js", "three.min.js", "editor/main.js", "editor/pbox.js"], function() {
+	LoadScripts(["fx.js", "three.min.js", "editor/main.js", "editor/pbox.js"], function(progress) {
 		
-		//CL("Loaded scripts in "+(T()-t)/1000+" seconds.");
-		
-		var d = E("app-container");
-		
-		d.ondragenter = d.ondragover = function(e) {
-			e.preventDefault();
-			e.stopPropagation();
+		// Done
+		if(progress == 100) {		
+			//CL("Loaded scripts in "+(T()-t)/1000+" seconds.");
+			
+			document.title = "Photoblob - A Blobware Project";
+			
+			var d = E("app-container"), l = E("loader");
+			
+			d.ondragenter = d.ondragover = function(e) {
+				e.preventDefault();
+				e.stopPropagation();
+			}
+			
+			d.addEventListener("drop", ReadFiles);		
+			canvas.addEventListener("click", MouseDetect);
+			canvas.addEventListener("mousemove", MouseDetect);
+			canvas.addEventListener("mousedown", MouseDetect);
+			canvas.addEventListener("mouseup", MouseDetect);
+			canvas.addEventListener("mousewheel", MouseDetect);
+			canvas.addEventListener("DOMMouseScroll", MouseDetect);
+			
+			addEventListener("keydown", Hotkeys);
+			
+			InitMenus();
+			
+			Update();
+			DrawEditor();
+			
+			// Hide the loader
+			l.style.pointerEvents = "none";
+			l.style.opacity = 0.0;
+			
+			setTimeout(function() {
+				D(l, false);
+			}, 1000);
+		} else {
+			document.title = "Photoblob - Loading ["+progress+"%]";
 		}
-		
-		d.addEventListener("drop", ReadFiles);		
-		canvas.addEventListener("click", MouseDetect);
-		canvas.addEventListener("mousemove", MouseDetect);
-		canvas.addEventListener("mousedown", MouseDetect);
-		canvas.addEventListener("mouseup", MouseDetect);
-		canvas.addEventListener("mousewheel", MouseDetect);
-		canvas.addEventListener("DOMMouseScroll", MouseDetect);
-		
-		addEventListener("keypress", Hotkeys);
-		
-		InitMenus();
-		
-		Update();
-		DrawEditor();
 	});	
 }
 
@@ -313,6 +332,9 @@ function MouseDetect(event) {
 	// This is the best cross-browser way of getting accurate canvas click coords
 	var x = FLOOR(event.clientX-t.getBoundingClientRect().left);
 	var y = FLOOR(event.clientY-t.getBoundingClientRect().top);
+	
+	// Clear cursor - I should never need to call this anywhere else
+	SC();
 	
 	// Unfocus from text box
 	if(type == "down" && FocusObj) {
@@ -335,7 +357,35 @@ function MouseDetect(event) {
 
 /* Detect keyboard events */
 function Hotkeys(event) {
-	var ct = event.ctrlKey, k = event.key ? event.key : String.fromCharCode(event.charCode+(ct?96:0)).toLowerCase(), sh = event.shiftKey, alt = event.altKey, hk = u = false;
+	var ct = event.ctrlKey, k = event.key ? event.key.toLowerCase() : String.fromCharCode(event.charCode+(ct?96:0)).toLowerCase(), sh = event.shiftKey, alt = event.altKey, hk = false, u = false;
+	
+	// Non-alphanumeric keys
+	if(event.key == null && event.charCode == 0) {
+		
+		var kc = event.keyCode;
+	
+		k = null;
+		
+		if(kc >= 112 && kc <= 123) {
+			k = "f"+(kc-111);
+		}
+		
+		switch(event.keyCode) {
+			case 8: k = "backspace"; break;
+			case 27: k = "escape"; break;
+			case 33: k = "pageup"; break;
+			case 34: k = "pagedown"; break;
+			case 35: k = "end"; break;
+			case 36: k = "home"; break;
+			case 37: k = "arrowleft"; break;
+			case 38: k = "arrowup"; break;
+			case 39: k = "arrowright"; break;
+			case 40: k = "arrowdown"; break;
+			case 45: k = "insert"; break;
+			case 46: k = "delete"; break;
+		}
+		if(k != null) CL(k); else CL(event.keyCode);
+	}
 	
 	if(ct) {
 		hk = u = true;	
@@ -367,8 +417,6 @@ function Hotkeys(event) {
 		}
 	}
 	
-	if(k == "F11") TFS(); h = true;
-	
 	// Update canvas
 	if(u) Update();
 	
@@ -376,18 +424,18 @@ function Hotkeys(event) {
 		event.preventDefault();
 		event.stopPropagation();
 	} else {
-		TypeDetect(event);
+		TypeDetect(event, k);
 	}
 }
 
 /* Detect regular typing */
-function TypeDetect(event) {
+function TypeDetect(event, k) {
 	
 	if(!FocusObj || FocusObj.value == undefined) return;
 	
-	var k = event.key, f = FocusObj, oldval = v = f.get(true);
+	var f = FocusObj, v = f.get(true), oldval = v;
 	
-	switch(k.toLowerCase()) {
+	switch(k) {
 		
 		// Delete next char
 		case "del":
@@ -703,10 +751,9 @@ function GetScaleToFit(w, h, mw, mh) {
 /* Clone image data */
 function CloneImg(g) {
 
-	var w = g.width, h = g.height, n = ImageData(w, h), d = n.data, d2 = g.data, i, j = 0;
+	var w = g.width, h = g.height, dl = w*h*4, n = ImageData(w, h), d = n.data, d2 = g.data, i = 0;
 	
-	for(; j < w*h; j++) {
-		i = j*4;
+	for(; i < dl; i += 4) {
 		d[i] = d2[i];
 		d[i+1] = d2[i+1];
 		d[i+2] = d2[i+2];
@@ -906,7 +953,7 @@ function InitMenus() {
 					new MenuItem("Grayscale", PBOX.Grayscale, "open"),
 					new MenuItem("Invert Colors", PBOX.InvertColors, "open"),
 					new MenuItem("Change HSL", PBOX.ChangeHSL, "open"),
-					new MenuItem("Gradient Map", IMGFX.GradientMap),
+					new MenuItem("Gradient Map"/*, IMGFX.GradientMap*/),
 					new MenuItem("Replace Color", PBOX.ReplaceColor, "open"),
 					new MenuItem("Add Noise", PBOX.AddNoise, "open"),
 					new MenuItem("Box Blur", PBOX.BoxBlur, "open"),
@@ -980,7 +1027,7 @@ function SetTheme(num) {
 		BG4C = "#5D4C3B", BG5 = "#654", BG6 = "#765", BG7 = "#876"; break;
 		
 		// Lime green
-		case 7: BG1 = "#012", BG2 = "#231", BG3 = "#342", BG4 = "#453",
+		case 7: BG1 = "#120", BG2 = "#231", BG3 = "#342", BG4 = "#453",
 		BG4C = "#4C5D3B", BG5 = "#564", BG6 = "#675", BG7 = "#786"; break;
 		
 		// Gray
@@ -1027,8 +1074,21 @@ function SetTheme(num) {
 		
 	}
 	
-	// Don't forget the canvas container
+	var can = document.createElement("canvas"), ctx = GC(can);
+	can.width = can.height = 40;
+	ctx.fillStyle = BG1;
+	ctx.fillRect(0, 0, 20, 20);
+	ctx.fillRect(20, 20, 40, 40);
+	ctx.fillStyle = BG2;
+	ctx.fillRect(20, 0, 40, 20);
+	ctx.fillRect(0, 20, 20, 40);
+	var img = "url("+can.toDataURL('image/png', 1.0)+")";
+	document.body.style.backgroundImage = img;
+	document.body.style.backgroundColor = BG1;
+	
+	// Don't forget the canvas container and background
 	E("app-container").style.background = BG2;
+	
 	
 	// Update global var
 	CurrentTheme = num;

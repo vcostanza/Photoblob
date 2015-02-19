@@ -1230,66 +1230,84 @@ IMGFX = {
 		
 		var last = IMGFX.GetHistory("last").img, w = last.width, h = last.height, t1 = T();
 		
+		// Parse percentages
+		if(typeof(new_w) == "string") {
+			if(new_w.indexOf("%")) new_w = ROUND(w*(parseInt(new_w)/100));
+			else new_w = parseInt(new_w);
+		}
+		if(typeof(new_h) == "string") {
+			if(new_h.indexOf("%")) new_h = ROUND(h*(parseInt(new_h)/100));
+			else new_h = parseInt(new_h);
+		}
+		
 		if(new_w < 1) new_w = ROUND(w*new_w);
 		if(new_h < 1) new_h = ROUND(h*new_h);
 		
 		// Get the original width and height and also the width/height integer and decimal offsets
-		var pw = w*4, wr = w/new_w, hr = h/new_h, wi = CEIL(wr), wc = (wi*2)-1, hi = CEIL(hr), hc = (hi*2)-1, wstart = 4*(wi-1), hstart = pw*(hi-1), wchc = wc*hc;
+		var pw = w*4, odl = pw*h, wr = w/new_w, hr = h/new_h, wi = CEIL(wr), wc = (wi*2)-1, hi = CEIL(hr), hc = (hi*2)-1, wstart = 4*(wi-1), hstart = pw*(hi-1), wchc = wc*hc;
 
 		// Create resized image container
 		ImageArea.img = GC(canvas).createImageData(new_w, new_h);
 		IMGFX.SetTarget(ImageArea.img);
 		
-		var d = IMGFX.td, d2 = last.data, dl = new_w*new_h*4, ar = 0, ag = 0, ab = 0, aa = 0, pnw = 0, s = 0, e = FLOOR(hr)*w*4, wht = 1/wchc, p, p1 = 0, k, j, o1 = 0, o2, px = 1, py = 0, i = 0;
+		var d = IMGFX.td, d2 = last.data, dl = new_w*new_h*4, ar = 0, ag = 0, ab = 0, aa = 0, pnw = 0,
+			s0 = -pw, s = 0, e = FLOOR(hr)*w*4, wht = 1/wchc, p0, p = -4, p1 = 0, k, j, j1, j0, o1 = 0, o2, px = 1, py = 0, i = 0;
 		
 		for(i = 0; i < dl; i += 4) {
 			
+			j0 = p0 = p;
 			p = p1;
-			p1 = (FLOOR(px*wr)*4)+s;
+			j1 = p1 = (FLOOR(px*wr)*4)+s;
 			
-			o1 = 0;			
-			if(px != 0) {
-				for(j = p; j < p+((p1-p)*2); j += 4) {
-					ar = FLOOR(((ar*o1)+d2[j])/(o1+1));
-					ag = FLOOR(((ag*o1)+d2[j+1])/(o1+1));
-					ab = FLOOR(((ab*o1)+d2[j+2])/(o1+1));
-					aa = FLOOR(((aa*o1)+d2[j+3])/(o1+1));
-					
-					for(k = j+pw; k < j+(pw*2); k += pw) {
-						ar = FLOOR(((ar*o1)+d2[k])/(o1+1));
-						ag = FLOOR(((ag*o1)+d2[k+1])/(o1+1));
-						ab = FLOOR(((ab*o1)+d2[k+2])/(o1+1));
-						aa = FLOOR(((aa*o1)+d2[k+3])/(o1+1));
-						
-						o1++;
-					}
+			if(p-p0 > pw) {
+				j0 = (FLOOR(p/pw)*pw)+4;
+			}
+			
+			if(p1-p > pw) {
+				j1 = (FLOOR(p/pw)+1)*pw;
+			}
+			
+			o1 = ar = ag = ab = aa = 0;
+			for(j = j0; j < j1; j += 4) {
+				for(k = j-(s-s0)+pw; k < j+(e-s); k += pw) {
+					if(k < 0 || k >= odl) continue;
+					ar += d2[k];
+					ag += d2[k+1];
+					ab += d2[k+2];
+					aa += d2[k+3];
 					
 					o1++;
 				}
 			}
 			
-			// Resize without interpolation
-			//~ d[i] = d2[p];
-			//~ d[i+1] = d2[p+1];
-			//~ d[i+2] = d2[p+2];
-			//~ d[i+3] = d2[p+3];
+			// Failsafe
+			if(o1 == 0) {
+				o1 = 1;
+				ar = d2[p];
+				ag = d2[p+1];
+				ab = d2[p+2];
+				aa = d2[p+3];
+			}
 				
 			// Interpolation
-			d[i] = ar;
-			d[i+1] = ag;
-			d[i+2] = ab;
-			d[i+3] = aa;
+			d[i] = FLOOR(ar/o1);
+			d[i+1] = FLOOR(ag/o1);
+			d[i+2] = FLOOR(ab/o1);
+			d[i+3] = FLOOR(aa/o1);
 			
 			px++;
-			if(px == new_w) {
+			if(px == new_w) {				
 				px = 0;
 				py++;
+				s0 = s;
 				s = e;
 				e = FLOOR(hr*(py+1))*pw;
 			}
 		}
 		
-		CL(o1);
+		if(IMGFX.selection) {
+			delete IMGFX.selection;
+		}
 		
 		//CL("Resize("+new_w+", "+new_h+"): "+(T() - t1));
 		

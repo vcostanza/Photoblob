@@ -167,8 +167,9 @@ PBOX_New = PBOX_Base.extend({
 /* Resize window */
 PBOX_Resize = PBOX_Base.extend({
 	init: function() {
-		this._super("Resize", 220, 150);
+		this._super("Resize", 240, 180);
 		
+		this.cb = [new CheckBox("Preview"), new CheckBox("Percentage")];
 		this.txt = [new TextBox(this, 80, 24, 128, 4, true, 1, 5000), new TextBox(this, 80, 24, 128, 4, true, 1, 5000)];
 		this.lbl = [new Label(80, 24, "Width:"), new Label(80, 24, "Height:")];
 		
@@ -176,37 +177,77 @@ PBOX_Resize = PBOX_Base.extend({
 		this.img_link = IMG("icons/link.svg");
 		this.img_unlink = IMG("icons/unlink.svg");
 		
+		// Link button
 		this.link = new ImageButton(this.img_link, 30, 30);
 		this.linked = true;
 		
-		this.txt[0].onchange = function(o, n) {
-			if(this.parent.linked) this.parent.txt[1].value = ROUND((this.parent.txt[1].value/o)*n);
+		// Image properties
+		this.scale = [1.0, 1.0];
+		this.size = [1, 1];
+		
+		// Pixels or percentage
+		this.sizeType = 0;
+		
+		// Text change event
+		this.txt[0].onchange = this.txt[1].onchange = function(o, n) {
+			n = this.get();
+			
+			// Get other text
+			var other = (this == this.parent.txt[0] ? 1 : 0);
+			
+			if(this.parent.linked) {
+				if(this.parent.sizeType == 0) this.parent.txt[other].value = ROUND(this.parent.scale[other]*n);
+				else this.parent.txt[other].value += n-o;
+			}
 			this.parent.resize();
 		};
 		
-		this.txt[1].onchange = function(o, n) {
-			if(this.parent.linked) this.parent.txt[0].value = ROUND((this.parent.txt[0].value/o)*n);
-			this.parent.resize();
-		};
-		
-		this.setChildren(this.txt, this.lbl, this.link);
+		this.setChildren(this.cb, this.txt, this.lbl, this.link);
 	},
 	def: function() {
 		this.txt[0].value = IMGFX.tw;
 		this.txt[1].value = IMGFX.th;
+		this.scale = [IMGFX.tw/IMGFX.th, IMGFX.th/IMGFX.tw];
+		this.size = [IMGFX.tw, IMGFX.th];
+		this.sizeType = 0;
 	},
 	resize: function() {
-		IMGFX.Resize(this.txt[0].get(), this.txt[1].get());
+		var w = this.txt[0].get(), h = this.txt[1].get();
+		if(this.sizeType == 1) w = w+"%", h = h+"%";
+		if(this.cb[0].active) IMGFX.Resize(w, h);
 	},
 	apply: function() {
+		IMGFX.Resize(this.txt[0].get(), this.txt[1].get());
 		IMGFX.AddHistory("Resize");
 	},
 	detect: function(x, y, type) {
 		
 		this._super(x, y, type);
 		
+		var i = 0;
+		
+		// Preview and pixel/percentage
+		for(; i < this.cb.length; i++) {
+			if(this.cb[i].detect(x, y, type) && type == "click") {
+				
+				// Change pixels to percentage and vice versa
+				if(i == 1) {
+					if(this.cb[1].active) {
+						this.sizeType = 1;
+						this.txt[0].value = ROUND((this.txt[0].get()/this.size[0])*100);
+						this.txt[1].value = ROUND((this.txt[1].get()/this.size[1])*100);
+					} else {
+						this.txt[0].value = ROUND((this.txt[0].get()/100)*this.size[0]);
+						this.txt[1].value = ROUND((this.txt[1].get()/100)*this.size[1]);
+						this.sizeType = 0;
+					}
+				}
+				this.resize();
+			}
+		}
+		
 		// Text boxes
-		for(var i = 0; i < this.txt.length; i++) {
+		for(i = 0; i < this.txt.length; i++) {
 			this.txt[i].detect(x, y, type);
 		}
 		
@@ -222,15 +263,25 @@ PBOX_Resize = PBOX_Base.extend({
 	draw: function(ctx) {
 		ctx.save();
 		
-		for(var i = 0; i < this.txt.length; i++) {
+		var i = 0;
+		
+		for(; i < this.txt.length; i++) {
 			this.lbl[i].set(this.x+15, this.y+15+(i*30));
 			this.txt[i].set(this.x+100, this.y+15+(i*30));
-		}
+			this.cb[i].set(this.x+15, this.y+80+(i*25));
+		}		
 		
-		this.link.set(this.x+180, this.y+26);
+		this.link.set(this.x+210, this.y+26);
 		
 		// Drawing begins here
 		this._super(ctx);
+		
+		ctx.font = "18px "+F1;
+		ctx.fillStyle = C1;
+		
+		for(i = 0; i < 2; i++) {
+			this.sizeType == 0 ? ctx.fillText("px", this.x+185, this.y+32+(i*30)) : ctx.fillText("%", this.x+185, this.y+32+(i*30))
+		}
 	
 		ctx.restore();
 	}
@@ -348,7 +399,6 @@ PBOX_ColorBox = PBOX_Base.extend({
 				SC("crosshair");
 				this.picking = true;
 			} else if(this.picking) {
-				SC();
 				if(ImageArea.open && WB(x, y, ImageArea)) {
 					cx = x-ImageArea.x;
 					cy = y-ImageArea.y;
@@ -451,14 +501,20 @@ PBOX_Grayscale = PBOX_Base.extend({
 		
 		// Radio buttons
 		if(type == "click") {
+			var mode = -1;
+			
 			for(var i = 0; i < this.rb.length; i++) {
+				if(mode == -1 && this.rb[i].active || this.rb[i].detect(x, y, type)) mode = i;
 				this.rb[i].toggle(false);
-				if(this.rb[i].detect(x, y, type)) IMGFX.Grayscale(i);
 			}
+			
+			if(mode == -1) mode = 0;
+			
+			this.rb[mode].toggle(true);
+			IMGFX.Grayscale(mode);		
 		}
 		
-		this._super(x, y, type);
-		
+		this._super(x, y, type);		
 	},
 	draw: function(ctx) {
 		ctx.save();
@@ -896,7 +952,7 @@ PBOX_View3D = PBOX_Base.extend({
 		
 		// Create mesh if it doesn't exist, otherwise just update the map
 		if(!this.mesh) {	
-			this.material = new THREE.MeshBasicMaterial({ map: texture });
+			this.material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
 			this.mesh = new THREE.Mesh(new THREE.BoxGeometry(200, 200, 200), this.material);
 			this.scene.add(this.mesh);
 		} else {
@@ -920,15 +976,29 @@ PBOX_View3D = PBOX_Base.extend({
 		Update();
 	},
 	detect: function(x, y, type) {
+		
+		// Grab model
 		if(type == "down" && WC(x, y, this.x+10, this.y+10, 400, 400)) {
 			this.meshrot = [this.mesh.rotation.y, this.mesh.rotation.x];
 			this.held = [x, y];
 			this.down = true;
+		
+		// Release model
 		} else if(type == "up") {
 			this.down = false;
+		
+		// Drag to rotate
 		} else if(type == "move" && this.down) {
 			this.mesh.rotation.y = this.meshrot[0]-(this.held[0]-x)/100;
 			this.mesh.rotation.x = this.meshrot[1]-(this.held[1]-y)/100;
+			Update();
+			
+		// Mouse wheel zoom
+		} else if(type == "wheelup") {
+			this.camera.position.z -= 10;
+			Update();
+		} else if(type == "wheeldown") {
+			this.camera.position.z += 10;
 			Update();
 		}
 	},
@@ -963,10 +1033,6 @@ PBOX_View3D = PBOX_Base.extend({
 		
 		r.render(this.scene, this.camera);
 		
-		ctx.fillStyle = C1;
-		ctx.font = "24px "+F1;
-		ctx.fillText("Much more to come...", this.x+50, this.y+30, this.w);
-	
 		ctx.restore();
 	}
 });
@@ -998,10 +1064,17 @@ PBOX_ChooseTheme = PBOX_Base.extend({
 		
 		if(type == "click") {		
 			// Radio buttons
+			var mode = -1;
+			
 			for(var i = 0; i < this.rb.length; i++) {
+				if(mode == -1 && this.rb[i].active || this.rb[i].detect(x, y, type)) mode = i;
 				this.rb[i].toggle(false);
-				if(this.rb[i].detect(x, y, type)) SetTheme(i);
 			}
+			
+			if(mode == -1) mode = 0;
+			
+			this.rb[mode].toggle(true);
+			SetTheme(mode);			
 		}
 		
 		this._super(x, y, type);
@@ -1161,8 +1234,8 @@ PBOX_About = PBOX_Base.extend({
 		// Text
 		this.name = "Photoblob";
 		this.desc = "Image/Texture Editor and 3D Model Viewer";
-		this.version = "0.1.5";
-		this.update = "Updated 02/15/2015";		
+		this.version = "0.1.7";
+		this.update = "Updated 02/18/2015";		
 		this.site = "http://photo.blob.software/";
 		this.copy = "© 2015 Vincent Costanza";
 		
@@ -1179,8 +1252,6 @@ PBOX_About = PBOX_Base.extend({
 	apply: function() {
 	},
 	detect: function(x, y, type) {
-		
-		SC();
 		
 		this.link.detect(x, y, type);
 		this.license.detect(x, y, type);

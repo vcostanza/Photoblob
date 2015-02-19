@@ -351,7 +351,7 @@ TextBox = Box.extend({
 	},
 	get: function(asString) {
 		if(this.numOnly) {
-			var v = num = this.value;
+			var v = this.value, num = v;
 			
 			if(v == "") num = 0;
 			else if(v == "-") num = -1;
@@ -378,15 +378,19 @@ TextBox = Box.extend({
 		
 		if(type == "click" && !WB(x, y, this)) return;
 		
-		var ctx = GC(canvas);
-		
 		switch(type) {
+			
+			case "move":				
+				if(WB(x, y, this)) SC("text");
+				break;
+			
 			case "click":
 				FocusObj = this;
+				var ctx = GC(canvas);
 				ctx.font = (this.h-4)+"px "+F1;
 				this.ind = this.get(true).length;
 				
-				var o = x-this.x, v = this.get(true), squish = Clamp((this.w-8)/ctx.measureText(v).width, 0, 1), c = i = 0;
+				var o = x-this.x, v = this.get(true), squish = Clamp((this.w-8)/ctx.measureText(v).width, 0, 1), c, i = 0;
 				
 				for(; i < v.length; i++) {
 					c += ctx.measureText(v[i]).width*squish;
@@ -621,7 +625,6 @@ EditArea = {
 	detect: function(x, y, type) {
 	
 		if(!WB(x, y, this) || PBOX.open) {
-			SC();
 			return;
 		}
 	
@@ -701,8 +704,6 @@ EditArea = {
 					IMGFX.Fill(x, y, MainColors.fg, 20);
 					Update();
 				}
-			} else {
-				SC();
 			}
 		} else if(ToolBox.get("Pen") && ImageArea.open) {
 			var p = this.path, i = this.path_last*2, imx = ImageArea.x, imy = ImageArea.y;
@@ -846,7 +847,7 @@ MenuBar = {
 			}
 				
 		} else {
-			this.setHighlight(undefined);
+			this.setHighlight();
 		}
 		
 		// Menu opened
@@ -856,7 +857,6 @@ MenuBar = {
 			
 			if(WB(x, y, menu) || item) {
 				
-				SC();
 				var m = FLOOR((y-menu.y)/(menu.h/opts.length));
 				
 				if(opts[m] == undefined) {
@@ -958,7 +958,6 @@ ToolBox = {
 	
 	clear: function() {
 		this.active = undefined;
-		SC();
 	},
 	
 	// Return true if tool is active
@@ -1321,12 +1320,9 @@ Brushes = {
 			var c = GC(imgcan);
 			c.drawImage(brush, 0, 0, s, s);
 			
-			return c.getImageData(0, 0, s, s);
-			
+			return c.getImageData(0, 0, s, s);			
 		}
-		
 	}
-	
 }
 
 /* Draw the editor loop */
@@ -1360,7 +1356,7 @@ function DrawEditor() {
 	PBOX.draw(ctx);
 	
 	// DEBUG: draw this on top of everything
-	FrameNum.draw(ctx);
+	//FrameNum.draw(ctx);
 	
 	/*if(ImageArea.open) {
 		IMGFX.Fuzzify(FUZZAMT);

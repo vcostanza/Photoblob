@@ -11,7 +11,8 @@
 }
 
 body {
-	background: url(bg.jpg) repeat #112;
+	margin: 0;
+	background: url() repeat #111;
 	color: #DD9;
 	font-family: Purisa;
 }
@@ -30,9 +31,8 @@ body {
 	width: 95%;
 	height: 95%;
 	padding: 6px;
-	border: 2px solid #112;
 	border-radius: 4px;
-	background: #223;
+	background: #222;
 	display: block;
 }
 
@@ -56,6 +56,28 @@ body {
 	width: 100%;
 	height: 100%;
 	background: url(alpha.png) repeat #666;
+}
+
+#loader {
+	position: absolute;
+	top: 0px;
+	left: 0px;
+	width: 100%;
+	height: 100%;
+	background: #000;
+	text-align: center;
+	opacity: 1.0;
+	transition: opacity 0.2s;
+	-moz-transition: opacity 0.2s;
+	-webkit-transition: opacity 0.2s;
+	-o-transition: opacity 0.2s;
+	-ms-transition: opacity 0.2s;
+}
+
+#loader * {
+	display: block;
+	font-size: 64px;
+	margin-top: 20%;
 }
 
 form {
