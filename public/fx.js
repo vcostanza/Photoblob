@@ -284,9 +284,8 @@ IMGFX = {
 		if(IMGFX.history.length == 0) return;
 		
 		var oldimg = IMGFX.GetHistory(index).img;
-		if(oldimg.width != ImageArea.img.width || oldimg.height != ImageArea.img.height) {
-			ImageArea.img = GC(canvas).createImageData(oldimg.width, oldimg.height);
-			IMGFX.SetTarget(ImageArea.img);
+		if(oldimg.width != IMGFX.tw || oldimg.height != IMGFX.th) {
+			IMGFX.SetTarget(ImageData(oldimg.width, oldimg.height));
 		}
 			
 		var d = IMGFX.td, d2 = oldimg.data, dl = IMGFX.tw*IMGFX.th, i = 0, j = 0;
@@ -304,7 +303,8 @@ IMGFX = {
 		
 		if(index != "last")
 			IMGFX.current = index;
-		
+			
+		ImageArea.update();		
 		Update();
 	},
 	
@@ -487,8 +487,11 @@ IMGFX = {
 				} break;
 		}
 		
-		CL("Grayscale("+g+"): "+(T() - t1));
+		ImageArea.update();
 		
+		//CL("Grayscale("+g+"): "+(T() - t1));
+		
+		return T()-t1;
 	},
 
 	/* Invert each pixel's color values
@@ -524,6 +527,8 @@ IMGFX = {
 				py += fw;
 			}
 		}
+		
+		ImageArea.update();
 		
 		//CL("InvertColors("+r+", "+g+", "+b+"): "+(T() - t1));
 		
@@ -581,6 +586,8 @@ IMGFX = {
 			}
 		}
 		
+		ImageArea.update();
+		
 		// This should output the normals on the first pass
 		// If a second pass is done, this should always output [1,1,1] [1,1,1]
 		//CL("["+mind+" "+maxd+"]");
@@ -635,8 +642,11 @@ IMGFX = {
 				break;
 		}
 		
-		CL("Brightness("+val+", "+type+"): "+(T() - t1));
+		ImageArea.update();
 		
+		//CL("Brightness("+val+", "+type+"): "+(T() - t1));
+		
+		return T()-t1;
 	},
 	
 	/* Shift each pixel's hue
@@ -660,6 +670,8 @@ IMGFX = {
 			
 		}
 		
+		ImageArea.update();
+		
 		//CL("ChangeHSL("+h+"): "+(T() - t1));
 		
 		return T()-t1;		
@@ -679,8 +691,7 @@ IMGFX = {
 		var old_w = IMGFX.tw;
 		
 		// Create resized image container
-		ImageArea.img = GC(canvas).createImageData(w, h);
-		IMGFX.SetTarget(ImageArea.img);
+		IMGFX.SetTarget(ImageData(w, h));
 		
 		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, dl = w*h*4, s = (x+(y*old_w))*4, p, w4 = w*4, pw = old_w*4, px = 0, py = 0, i = 0, t1 = T();
 		
@@ -699,6 +710,8 @@ IMGFX = {
 				py += pw;
 			}
 		}
+		
+		ImageArea.update();
 		
 		// Remove selection
 		if(sel) delete IMGFX.selection;
@@ -772,9 +785,11 @@ IMGFX = {
 			d[i+3] = d2[p+3];
 		}
 		
-		// DEBUG: Time it took to perform the shift
-		CL("Shift("+x/4+", "+y+"): "+(T() - t1));
+		ImageArea.update();
 		
+		//CL("Shift("+x/4+", "+y+"): "+(T() - t1));
+		
+		return T()-t1;
 	},
 	
 	/* Rotate picture
@@ -787,8 +802,7 @@ IMGFX = {
 		
 		var w = IMGFX.tw, h = IMGFX.th, pw = w*4, ph = h*4;
 		
-		ImageArea.img = new ImageData(h, w);
-		IMGFX.SetTarget(ImageArea.img);
+		IMGFX.SetTarget(ImageData(h, w));
 		
 		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, dl = w*h*4, s, m, p, i = 0, t1 = T();
 	
@@ -808,10 +822,13 @@ IMGFX = {
 			d[i+3] = d2[p+3];
 		}
 		
-		CL("Rotate("+deg+"): "+(T() - t1));
+		ImageArea.update();
+		
+		//CL("Rotate("+deg+"): "+(T() - t1));
 		
 		IMGFX.AddHistory("Rotate");
 		
+		return T()-t1;
 	},
 	
 	/* Mirror picture
@@ -848,8 +865,11 @@ IMGFX = {
 			d[i+3] = d2[p+3];
 		}
 		
-		CL("Mirror("+x+", "+y+"): "+(T() - t1));
+		ImageArea.update();
 		
+		//CL("Mirror("+x+", "+y+"): "+(T() - t1));
+		
+		return T()-t1;
 	},	
 	
 	/* Map the "value" of each color to a point within a gradient
@@ -880,6 +900,8 @@ IMGFX = {
 			
 		}
 		
+		ImageArea.update();
+		
 		//CL("GradientMap("+grad+"): "+(T()-t1));
 		
 		return T()-t1;		
@@ -909,6 +931,8 @@ IMGFX = {
 			
 		}
 		
+		ImageArea.update();
+		
 		//CL("ReplaceColor("+ca+", "+cb+", "+tol+"): "+(T()-t1));
 		
 		return T()-t1;		
@@ -931,6 +955,8 @@ IMGFX = {
 			d[i+1] = d2[i+1]+t;
 			d[i+2] = d2[i+2]+t;
 		}
+		
+		ImageArea.update();
 		
 		//CL("AddNoise("+a+"): "+(T()-t1));
 		
@@ -1016,10 +1042,11 @@ IMGFX = {
 			
 		}
 		
-		CL("Reduce Noise("+r+"): "+(T() - t1));
+		ImageArea.update();
 		
-		//IMGFX.AddHistory("Reduce Noise");
+		//CL("Reduce Noise("+r+"): "+(T() - t1));
 		
+		return T()-t1;
 	},
 	
 	/* Apply a brush to the image */
@@ -1059,6 +1086,8 @@ IMGFX = {
 				p += 4;
 			
 		}
+		
+		ImageArea.update();
 		
 	},
 	
@@ -1156,6 +1185,41 @@ IMGFX = {
 		
 	},
 	
+	/* Zoom - A resize function with no interpolation and less overhead */
+	/* Made specifically for zooming the image area */
+	Zoom: function(amt, sx, sy) {
+		if(!IMGFX.target) return;
+		
+		var t1 = T(), img = ImageArea.img, amti = 1/amt, d2 = IMGFX.td, w = IMGFX.tw, h = IMGFX.th, new_w = FLOOR(w*amt)-sx, new_h = FLOOR(h*amt)-sy,		
+			dx = Clamp(new_w, 1, EditArea.w), dy = Clamp(new_h, 1, EditArea.h);
+		
+		// Only create a new image container if we need to
+		if(img.width != dx || img.height != dy) ImageArea.img = ImageData(dx, dy);
+		
+		var d = ImageArea.img.data, pw = w*4, dl = dx*dy*4, i = 0, px = sx, py = sy, s = FLOOR(amti*py)*pw;
+		
+		dx += sx;
+	
+		for(; i < dl; i += 4) {
+			
+			p = (FLOOR(px*amti)*4)+s;
+			
+			d[i] = d2[p];
+			d[i+1] = d2[p+1];
+			d[i+2] = d2[p+2];
+			d[i+3] = d2[p+3];
+			
+			px++;
+			if(px == dx) {
+				px = sx;
+				py++;
+				s = FLOOR(amti*py)*pw;
+			}
+		}
+		
+		return T()-t1;
+	},
+	
 	/*****************************
 	 * Performance testing *
 	 *****************************/
@@ -1163,7 +1227,7 @@ IMGFX = {
 	/* How fast can Javascript generate an image?
 	** size		Square image size */
 	GenTest: function(size) {
-		var img = GC(canvas).createImageData(size, size);
+		var img = ImageData(size, size);
 		
 		var d = img.data, dl = size*size, i = 0, j = 0;
 		
@@ -1183,7 +1247,8 @@ IMGFX = {
 		
 		ImageArea.img = img;
 		ImageArea.open = true;
-		IMGFX.SetTarget(ImageArea.img);
+		ImageArea.zoom = 1;
+		IMGFX.SetTarget(CloneImg(ImageArea.img));
 		Update();
 		return t1;
 	},
@@ -1224,9 +1289,11 @@ IMGFX = {
 	 *****************************/
 	 
 	/* Resize image
-	** TODO: Make this not suck; needs more averages and better performance */
-	Resize: function(new_w, new_h) {
+	** TODO: Implement upscale interpolation */
+	Resize: function(new_w, new_h, interp) {
 		if(!IMGFX.target) return;
+		
+		if(interp == null) interp = 0;
 		
 		var last = IMGFX.GetHistory("last").img, w = last.width, h = last.height, t1 = T();
 		
@@ -1247,63 +1314,88 @@ IMGFX = {
 		var pw = w*4, odl = pw*h, wr = w/new_w, hr = h/new_h, wi = CEIL(wr), wc = (wi*2)-1, hi = CEIL(hr), hc = (hi*2)-1, wstart = 4*(wi-1), hstart = pw*(hi-1), wchc = wc*hc;
 
 		// Create resized image container
-		ImageArea.img = GC(canvas).createImageData(new_w, new_h);
-		IMGFX.SetTarget(ImageArea.img);
+		IMGFX.SetTarget(ImageData(new_w, new_h));
 		
 		var d = IMGFX.td, d2 = last.data, dl = new_w*new_h*4, ar = 0, ag = 0, ab = 0, aa = 0, pnw = 0,
 			s0 = -pw, s = 0, e = FLOOR(hr)*w*4, wht = 1/wchc, p0, p = -4, p1 = 0, k, j, j1, j0, o1 = 0, o2, px = 1, py = 0, i = 0;
 		
-		for(i = 0; i < dl; i += 4) {
-			
-			j0 = p0 = p;
-			p = p1;
-			j1 = p1 = (FLOOR(px*wr)*4)+s;
-			
-			if(p-p0 > pw) {
-				j0 = (FLOOR(p/pw)*pw)+4;
-			}
-			
-			if(p1-p > pw) {
-				j1 = (FLOOR(p/pw)+1)*pw;
-			}
-			
-			o1 = ar = ag = ab = aa = 0;
-			for(j = j0; j < j1; j += 4) {
-				for(k = j-(s-s0)+pw; k < j+(e-s); k += pw) {
-					if(k < 0 || k >= odl) continue;
-					ar += d2[k];
-					ag += d2[k+1];
-					ab += d2[k+2];
-					aa += d2[k+3];
-					
-					o1++;
+		// No interpolation (nearest neighbor)
+		if(interp == 0) {		
+			px = 0, py = 1;
+			for(i = 0; i < dl; i += 4) {
+				
+				p = (FLOOR(px*wr)*4)+s;
+				
+				d[i] = d2[p];
+				d[i+1] = d2[p+1];
+				d[i+2] = d2[p+2];
+				d[i+3] = d2[p+3];
+				
+				px++;
+				if(px == new_w) {
+					px = 0;
+					py++;
+					s = e;
+					e = FLOOR(hr*py)*pw;
 				}
 			}
 			
-			// Failsafe
-			if(o1 == 0) {
-				o1 = 1;
-				ar = d2[p];
-				ag = d2[p+1];
-				ab = d2[p+2];
-				aa = d2[p+3];
-			}
+		// Nearest neighbor + interpolate gaps
+		} else if(interp == 1) {		
+			for(i = 0; i < dl; i += 4) {
 				
-			// Interpolation
-			d[i] = FLOOR(ar/o1);
-			d[i+1] = FLOOR(ag/o1);
-			d[i+2] = FLOOR(ab/o1);
-			d[i+3] = FLOOR(aa/o1);
-			
-			px++;
-			if(px == new_w) {				
-				px = 0;
-				py++;
-				s0 = s;
-				s = e;
-				e = FLOOR(hr*(py+1))*pw;
+				j0 = p0 = p;
+				p = p1;
+				j1 = p1 = (FLOOR(px*wr)*4)+s;
+				
+				if(p-p0 > pw) {
+					j0 = (FLOOR(p/pw)*pw)+4;
+				}
+				
+				if(p1-p > pw) {
+					j1 = (FLOOR(p/pw)+1)*pw;
+				}
+				
+				o1 = ar = ag = ab = aa = 0;
+				for(j = j0; j < j1; j += 4) {
+					for(k = j-(s-s0)+pw; k < j+(e-s); k += pw) {
+						if(k < 0 || k >= odl) continue;
+						ar += d2[k];
+						ag += d2[k+1];
+						ab += d2[k+2];
+						aa += d2[k+3];
+						
+						o1++;
+					}
+				}
+				
+				// Failsafe
+				if(o1 == 0) {
+					o1 = 1;
+					ar = d2[p];
+					ag = d2[p+1];
+					ab = d2[p+2];
+					aa = d2[p+3];
+				}
+					
+				// Interpolation
+				d[i] = FLOOR(ar/o1);
+				d[i+1] = FLOOR(ag/o1);
+				d[i+2] = FLOOR(ab/o1);
+				d[i+3] = FLOOR(aa/o1);
+				
+				px++;
+				if(px == new_w) {				
+					px = 0;
+					py++;
+					s0 = s;
+					s = e;
+					e = FLOOR(hr*(py+1))*pw;
+				}
 			}
 		}
+		
+		ImageArea.update();
 		
 		if(IMGFX.selection) {
 			delete IMGFX.selection;
@@ -1323,7 +1415,10 @@ IMGFX = {
 		
 		if(!last) return;
 		
-		var d2 = last.img.data, dl = w*h, dl4 = dl*4, s = (x+(y*w))*4, filled = new Uint8ClampedArray(dl), sc = [d2[s], d2[s+1], d2[s+2]], scsum = sc[0]+sc[1]+sc[2], cb = 1,
+		CB = 0;
+		Bla = new Array();
+		
+		var d2 = last.img.data, dl = w*h, dl4 = dl*4, s = (x+(y*w))*4, filled = new Uint8ClampedArray(dl), sc = [d2[s], d2[s+1], d2[s+2]], scsum = sc[0]+sc[1]+sc[2],
 		
 		// Returns tolerance of a pixel
 		getTol = function(p) {
@@ -1337,37 +1432,72 @@ IMGFX = {
 			filled[i/4] = 1;
 		},
 		
-		isBorder = function(i, start_w, end_w) {
-			return filled[i/4] || i < start_w || i >= end_w || getTol(i) > 1;
+		isBorder = function(i, start_w, end_w, ignoreFill) {
+			return (!ignoreFill && filled[i/4]) || i < start_w || i >= end_w || getTol(i) > 1;
 		},
 		
 		fillSegment = function(p) {
-			var div = p/pw, start_w = FLOOR(div)*pw, end_w = CEIL(div)*pw, e = 0, i;
+			CB++;
+			var div = p/pw, start_w = FLOOR(div)*pw, end_w = (FLOOR(div)+1)*pw, e = -4, i = p, min_above = null, min_below = null, c = 0;
+			Bla.push(FLOOR(div));
 			
-			for(i = 0; i < 4; i++) {
+			if(isBorder(p, start_w, end_w)) return;
 			
-				if(i == 0) e = p+pw;
-				else if(i == 1) e = p-pw;
-				else if(i == 2) e = p-4;
-				else if(i == 3) e = p+4;					
+			while(c < 10000) {
 				
-				if(filled[e/4] || e < 0 || e > dl4 || (i > 1 && (e < start_w || e >= end_w))) continue;
-				
-				diff = getTol(e);
-				if(diff <= 1) {
-					fillDot(e, diff);					
-					fillSegment(e);
+				// Check above
+				if(!isBorder(i-pw, 0, dl4, true)) {
+					min_above = i-pw;
+				} else {
+					if(min_above != null) {
+						//fillSegment(min_above);
+						fillDot(min_above, 0);
+						min_above = null;
+					}
 				}
+				
+				// Check below
+				if(!isBorder(i+pw, 0, dl4, true)) {
+					min_below = i+pw;
+				} else {
+					if(min_below != null) {
+						//fillSegment(min_below);
+						fillDot(min_below, 0);
+						min_below = null;
+					}
+				}
+				
+				// Check current
+				if(isBorder(i, start_w, end_w)) {
+					if(e == -4) {
+						e = 4;
+						i = p+4;
+						continue;
+					} else {
+						return;
+					}
+				}
+				
+				//fillDot(i, 0);
+				
+				i += e;
+				c++;
 			}
+			if(c >= 10000) CL("Infinite loop...");
 		}
 		
 		fillSegment(s);
 		//traceBorder(s);
 		
-		CL("Fill("+x+", "+y+", "+col+", "+tol+"): "+(T()-t1));
+		//CL("Fill("+x+", "+y+", "+col+", "+tol+"): "+(T()-t1));
 		
 		//IMGFX.AddHistory("Fill");
 		
+		Bla.sort(function(a,b){return a-b;});
+		
+		ImageArea.update();
+		
+		return T()-t1;
 	},
 	
 	/* Motion blur */
@@ -1397,10 +1527,11 @@ IMGFX = {
 			
 		}
 		
-		CL("MotionBlur("+a+"): "+(T()-t1));
+		ImageArea.update();
 		
-		IMGFX.AddHistory("Motion Blur");
+		//CL("MotionBlur("+a+"): "+(T()-t1));
 		
+		return T()-t1;
 	},
 	 
 	/* Make the image fuzzier */
@@ -1436,6 +1567,8 @@ IMGFX = {
 			d[i+3] = d2[i+3+t];
 			
 		}
+		
+		ImageArea.update();
 		
 	},
 	
@@ -1509,6 +1642,8 @@ IMGFX = {
 			d[i+2] = ra[t+2];
 			
 		}
+		
+		ImageArea.update();
 	}
 };
 

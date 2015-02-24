@@ -33,6 +33,10 @@ PBOX_Base = Class.extend({
 		this.title = title;		// Title displayed on bar
 		this.noImage = noImage;	// if window can be opened when no image is loaded
 		this.active = false;	// if window is opened/closed
+		this.closing = false;	// Used for fading
+		
+		// Fade in/fade out
+		this.fadeTime = -1;
 		
 		// Title bar dragging
 		this.isDragging = false;
@@ -66,6 +70,7 @@ PBOX_Base = Class.extend({
 		if(!this.noImage && !ImageArea.open) return;
 		
 		if(!this.active) {
+			this.fadeTime = T();
 			this.active = true;
 			this.def();
 			Update();
@@ -77,7 +82,8 @@ PBOX_Base = Class.extend({
 		if(this.active) {
 			if(!applied) this.cancel();
 			else this.apply();
-			this.active = false;
+			this.fadeTime = T();
+			this.closing = true;
 			Update();
 		}
 	},
@@ -210,6 +216,7 @@ PBOX_Resize = PBOX_Base.extend({
 		this.scale = [IMGFX.tw/IMGFX.th, IMGFX.th/IMGFX.tw];
 		this.size = [IMGFX.tw, IMGFX.th];
 		this.sizeType = 0;
+		this.cb[1].active = false;
 	},
 	resize: function() {
 		var w = this.txt[0].get(), h = this.txt[1].get();
@@ -217,7 +224,7 @@ PBOX_Resize = PBOX_Base.extend({
 		if(this.cb[0].active) IMGFX.Resize(w, h);
 	},
 	apply: function() {
-		IMGFX.Resize(this.txt[0].get(), this.txt[1].get());
+		this.resize();
 		IMGFX.AddHistory("Resize");
 	},
 	detect: function(x, y, type) {
@@ -917,22 +924,25 @@ PBOX_ReplaceColor = PBOX_Base.extend({
 /* Three.JS 3D Texture Preview */
 PBOX_View3D = PBOX_Base.extend({
 	init: function() {
-		this._super("Three.js 3D Texture Preview", 420, 420);
+		this._super("Three.js 3D Texture Preview", 420, 470);
 		
 		// Moving the model with the mouse
 		this.down = false;		// Mouse down
 		this.held = [0, 0];		// Position where clicked
 		this.meshrot = [0, 0];	// Mesh rotation before clicking down
 		
-		// No children needed here
+		// No default buttons
 		delete this.b_apply;
-		delete this.b_cancel;		
-		this.children = [];
+		delete this.b_cancel;
+		
+		this.b_dump = new Button("Dump UVs");
+		this.b_clear = new Button("Clear UVs");
+		this.children = [this.b_dump, this.b_clear];
 		
 		// Generic scene
 		this.scene = new THREE.Scene();
 		this.camera = new THREE.PerspectiveCamera(75, 1, 1, 10000);
-		this.camera.position.z = 300;
+		this.camera.position.z = 330;
 
 		var r = this.renderer = new THREE.WebGLRenderer(canvas), rd = r.domElement;
 		r.setSize(0, 0);		
@@ -955,7 +965,7 @@ PBOX_View3D = PBOX_Base.extend({
 		// Create mesh if it doesn't exist, otherwise just update the map
 		if(!this.mesh) {	
 			this.material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
-			this.mesh = new THREE.Mesh(new THREE.BoxGeometry(200, 200, 200), this.material);
+			this.mesh = new THREE.Mesh(new THREE.SphereGeometry(200, 16, 12), this.material);
 			this.scene.add(this.mesh);
 		} else {
 			this.material.map = texture;
@@ -979,9 +989,21 @@ PBOX_View3D = PBOX_Base.extend({
 	},
 	detect: function(x, y, type) {
 		
+		// Dump UVs button
+		if(this.b_dump.detect(x, y, type)) {
+			ImageArea.dumpUVs(this.mesh.geometry);
+			
+		// Clear UVs button
+		} else if(this.b_clear.detect(x, y, type)) {
+			ImageArea.UVs = null;
+			Update();
+		}
+		
+		var r = this.renderer, m = this.mesh, sensitivity = 0.005;
+		
 		// Grab model
-		if(type == "down" && WC(x, y, this.x+10, this.y+10, 400, 400)) {
-			this.meshrot = [this.mesh.rotation.y, this.mesh.rotation.x];
+		if(type == "down" && WC(x, y, this.x+10, this.y+66, 400, 400)) {
+			this.meshrot = [m.rotation.y, m.rotation.x];
 			this.held = [x, y];
 			this.down = true;
 		
@@ -991,23 +1013,23 @@ PBOX_View3D = PBOX_Base.extend({
 		
 		// Drag to rotate
 		} else if(type == "move" && this.down) {
-			this.mesh.rotation.y = this.meshrot[0]-(this.held[0]-x)/100;
-			this.mesh.rotation.x = this.meshrot[1]-(this.held[1]-y)/100;
-			Update();
+			m.rotation.y = this.meshrot[0]-(this.held[0]-x)*sensitivity;
+			m.rotation.x = this.meshrot[1]-(this.held[1]-y)*sensitivity;
+			r.render(this.scene, this.camera);
 			
 		// Mouse wheel zoom
 		} else if(type == "wheelup") {
 			this.camera.position.z -= 10;
-			Update();
+			r.render(this.scene, this.camera);
 		} else if(type == "wheeldown") {
 			this.camera.position.z += 10;
-			Update();
+			r.render(this.scene, this.camera);
 		}
 	},
 	draw: function(ctx) {
 		ctx.save();
 		
-		var r = this.renderer, rd = r.domElement, rx = this.x+16, ry = this.y+16, rw = 400, rh = 400;
+		var r = this.renderer, rd = r.domElement, rx = this.x+16, ry = this.y+66, rw = 400, rh = 400;
 		
 		// Clamp render size
 		if(rx-6 < 0) {
@@ -1029,6 +1051,10 @@ PBOX_View3D = PBOX_Base.extend({
 		
 		rd.style.left = rx+"px";
 		rd.style.top = ry+"px";
+		
+		// Buttons
+		this.b_dump.set(this.x+16, this.y+16);
+		this.b_clear.set(this.b_dump.x+this.b_dump.w+10, this.y+16);
 		
 		// Drawing begins here
 		this._super(ctx);
@@ -1463,11 +1489,9 @@ PBOX = {
 		var t = undefined, opened = false;
 		for(var i in this) {
 			t = this[i];
-			if(typeof(t) == "object" && t.draw != undefined && t.active == true) {
+			if(typeof(t) == "object" && t.draw != undefined && t.active == true && t.closing == false) {
 			
 				opened = true;
-				
-				// Detect mouse within window
 					
 				// Detect mouse on title bar
 				if(x-t.x >= 0 && x-t.x < t.w && t.y-y >= 0 && t.y-y <= 30) {
@@ -1487,6 +1511,7 @@ PBOX = {
 					
 				}
 				
+				// Detect within window
 				t.detect(x, y, type);
 				
 				// Currently dragging window
@@ -1524,7 +1549,25 @@ PBOX = {
 					t.y = (canvas.height-t.h)/3;
 				}
 				
+				// Fading effects
+				if(t.fadeTime != -1) {
+					var time = T()-t.fadeTime;
+					if(time > 200) {
+						t.fadeTime = -1;
+						if(t.closing) {
+							t.closing = false;
+							t.active = false;
+							continue;
+						}
+					} else {
+						var o = Math.sin((time/200)*(Math.PI/2));	// Sine fading always looks nicer than lerp
+						ctx.globalAlpha = t.closing ? 1-o : o;
+						Update();
+					}
+				}
+				
 				t.draw(ctx);
+				
 				
 				ctx.save();
 				
@@ -1543,6 +1586,7 @@ PBOX = {
 				
 				ctx.restore();
 				
+				ctx.globalAlpha = 1;		
 			}
 		}	
 	}

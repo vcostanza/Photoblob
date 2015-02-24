@@ -42,6 +42,9 @@ LockKeyboard = false;
 // Should be left blank if node server is hosted on same server as this site
 NODE_SERVER = "";
 
+// Is this being hosted locally?
+LOCAL = (window.location.host == "" || window.location.host == "localhost");
+
 // Math function aliases
 ABS = Math.abs, MAX = Math.max, MIN = Math.min, CEIL = Math.ceil, FLOOR = Math.floor, ROUND = Math.round;
 
@@ -51,6 +54,7 @@ function ARCPY(arr) {
 	for(; i < arr.length; i++) {
 		arrcpy[i] = arr[i];
 	}
+	
 	return arrcpy;
 }
 
@@ -274,6 +278,7 @@ function StartEditor() {
 	document.title = "Photoblob - Loading...";
 
 	ALPHA_BG = IMG("alpha.png");
+	ERROR_IMG = IMG("icons/error.svg");
 	canvas = E("editor");
 	if(!canvas) return;
 	
@@ -561,6 +566,22 @@ function DrawLine(ctx, x1, y1, x2, y2) {
 	ctx.moveTo(x1, y1);
 	ctx.lineTo(x2, y2);
 	ctx.stroke();
+	ctx.closePath();
+}
+
+/* Quick triangle */
+function DrawTriangle(ctx, x1, y1, x2, y2, x3, y3, stroke, fill) {
+	
+	if(stroke == null) stroke = true;
+	if(fill == null) fill = true;
+	
+	ctx.beginPath();
+	ctx.moveTo(x1, y1);
+	ctx.lineTo(x2, y2);
+	ctx.lineTo(x3, y3);
+	ctx.lineTo(x1, y1);
+	if(stroke) ctx.stroke();
+	if(fill) ctx.fill();
 	ctx.closePath();
 }
 

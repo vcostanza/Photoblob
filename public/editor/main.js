@@ -602,17 +602,22 @@ ColorBox = Box.extend({
 	}
 });
 
-/* Background drawer */
+/* Background */
 BG = {
 	draw: function(ctx) {
 		ctx.fillStyle = BG2;
-		ctx.fillRect(0, 0, canvas.width, canvas.height);
+		
+		var e = EditArea, w = canvas.width, h = canvas.height;
+		
+		ctx.fillRect(0, 0, w, e.y);			// Menu bar	background
+		ctx.fillRect(0, e.y, e.x, h);		// Tool box background
+		ctx.fillRect(e.x+e.w, e.y, w, h);	// Menu bar	background
 	}
 };
 
 /* Frame drawer */
 FrameNum = {
-	draw: function(ctx) {
+	draw: function(ctx) {		
 		ctx.font = "18px "+F1;
 		ctx.fillStyle = C1;
 		ctx.fillText("F: "+Frame, canvas.width-ctx.measureText("F: "+Frame).width-10, 23);
@@ -644,7 +649,7 @@ Tooltip = {
 				t.timeout = null;
 				Update();
 			}
-		}, 1000);
+		}, 500);
 	},
 	draw: function(ctx) {
 		
@@ -683,9 +688,12 @@ EditArea = {
 	
 	// Specific vars
 	selectArea: {x: 0, y: 0, x2: 0, y2: 0},
+	grabX: 0,
+	grabY: 0,
 	path: [],
 	path_last: 0,
 	mouseDown: false,
+	toggle: false,
 	selecting: false,
 	
 	detect: function(x, y, type) {
@@ -693,30 +701,50 @@ EditArea = {
 		if(!WB(x, y, this) || PBOX.open) {
 			return;
 		}
+		
+		if(type == "down") this.mouseDown = true;
+		else if(type == "up") this.mouseDown = false;
 	
 		if(ToolBox.get("Box Select") && ImageArea.open) {
 			if(type == "click") return;
+			
+			// Clear existing pen path
+			if(this.path.length > 0) {
+				this.path = [];
+				this.path_last = 0;
+				Update();
+			}
 		
 			var s = this.selectArea;
 			
 			if(this.selecting) {
+				
+				// Selection complete
 				if(type == "up") {
 					
-					x = Clamp(x-ImageArea.x, 0, ImageArea.w);
-					y = Clamp(y-ImageArea.y, 0, ImageArea.h);
-					s.x = Clamp(s.x-ImageArea.x, 0, ImageArea.w);
-					s.y = Clamp(s.y-ImageArea.y, 0, ImageArea.h);
+					var ix = ImageArea.x, iy = ImageArea.y, img = ImageArea.img;
+					
+					x = Clamp(x-ix, 0, img.width);
+					y = Clamp(y-iy, 0, img.height);
+					s.x = Clamp(s.x-ix, 0, img.width);
+					s.y = Clamp(s.y-iy, 0, img.height);
 					
 					var sx = (x < s.x ? x : s.x), sy = (y < s.y ? y : s.y);
 					
 					IMGFX.SEL_SetBox(new Selection(sx, sy, ABS(s.x-x), ABS(s.y-y)));
 					this.selecting = false;
+					
+				// Adjusting selection
 				} else if(type == "move") {
 					s.x2 = x;
 					s.y2 = y;
+					
+				// Increase selection size
 				} else if(type == "wheelup") {
 					s.x = Clamp(s.x-1, 0, EditArea.w);
 					s.y = Clamp(s.y-1, 0, EditArea.h);
+					
+				// Decrease selection size
 				} else if(type == "wheeldown") {
 					s.x = Clamp(s.x+1, 0, EditArea.w);
 					s.y = Clamp(s.y+1, 0, EditArea.h);
@@ -746,17 +774,19 @@ EditArea = {
 				Update();
 			}
 		} else if(ToolBox.get("Brush") || ToolBox.get("Erase")) {
-			if(WB(x, y, ImageArea) && type == "down")
-				this.mouseDown = true;
+			
+			var bd = ToolBox.getData();
+			
 			if(this.mouseDown) {
 				if(type == "move") {
 					x -= ImageArea.x;
 					y -= ImageArea.y;
-					var bd = ToolBox.getData();
-					IMGFX.ApplyBrush(x, y, MainColors.fg, bd.brush[0], ToolBox.active.name == "Erase");
+					
+					var z = ImageArea.zoom;
+					
+					IMGFX.ApplyBrush(CEIL(x/z), CEIL(y/z), MainColors.fg, bd.brush[0].imgdata, ToolBox.active.name == "Erase");
 					Update();
 				} else if(type == "up") {
-					this.mouseDown = false;
 					IMGFX.AddHistory(ToolBox.active.name);
 					Update();
 				}
@@ -780,7 +810,7 @@ EditArea = {
 			if(type == "click") {
 				p[i] = x;
 				p[i+1] = y;
-				this.mouseDown = !this.mouseDown;
+				this.toggle = !this.toggle;
 				Update();
 				this.path_last++;
 				
@@ -798,7 +828,19 @@ EditArea = {
 				if(i > 0) Update();
 			}
 			SC("crosshair");
-		}
+		}/* else if(ToolBox.get("Grab") && ImageArea.open) {
+			SC("grab");
+			
+			if(type == "down") {
+				this.grabX = x;
+				this.grabY = y;
+			}
+			if(this.mouseDown) {
+				SC("grabbing");
+				ImageArea.setOffset(x-this.grabX, y-this.grabY);
+				Update();
+			}
+		}*/
 	},
 	
 	draw: function(ctx) {
@@ -806,20 +848,84 @@ EditArea = {
 		this.h = canvas.height-this.y;
 		
 		ctx.fillStyle = GRY;
-		ctx.fillRect(this.x, this.y, this.w, this.h);
+		ctx.fillRect(0, 0, canvas.width, canvas.height);
 	}
 };
 
 /* The image area */
+/* Overlays such as selections, UV maps, and other image helpers are drawn here */
 ImageArea = {
 	x: 0,
 	y: 0,
 	w: 0,
 	h: 0,
+	sx: 0,		// Image drawing offset x
+	sy: 0,		// Image drawing offset y
+	off_x: 0,	// Grab offset x
+	off_y: 0,	// Grab offset y
 	zoom: 1,
 	open: false,
 	tempimg: undefined,
 	img: undefined,
+	UVs: undefined,
+	dumpUVs: function(g) {
+		if(g && g.faceVertexUvs) {
+			var fvu = g.faceVertexUvs, i = 0, j = 0, k = 0;
+			
+			this.UVs = [];
+			
+			// Vertex groups
+			for(; i < fvu.length; i++) {
+				// Faces
+				for(j = 0; j < fvu[i].length; j++) {
+					// Vertices
+					for(k = 0; k < 3; k++) {
+						this.UVs.push(fvu[i][j][k].x, fvu[i][j][k].y);
+					}
+				}
+			}
+			
+			Update();
+		}
+	},
+	setOffset: function(x, y) {
+		/*var e = EditArea, w2 = CEIL((IMGFX.tw/2)*this.zoom), h2 = CEIL((IMGFX.th/2)*this.zoom);
+		this.off_x = Clamp(x, e.x-w2, e.x+e.w-w2);
+		this.off_y = Clamp(y, e.y-h2, e.y+e.h-h2);*/
+		this.off_x = x;
+		this.off_y = y;
+		this.update();
+	},
+	setZoom: function(value) {
+		if(value == "in")
+			value = this.zoom + (this.zoom >= 1 ? 1 : 0.1);
+		else if(value == "out")
+			value = this.zoom - (this.zoom > 1 ? 1 : 0.1);
+		
+		this.zoom = Clamp(value, 0.05, 16);
+		this.update();
+	},
+	update: function() {
+		
+		/* This code is a mess - do something! */
+		
+		var x = this.off_x, y = this.off_y, e = EditArea, z = this.zoom, w = IMGFX.tw*z, h = IMGFX.th*z, w2 = CEIL(w/2), h2 = CEIL(h/2), posx = FLOOR((e.w-w)/2+e.x)+x, posy = FLOOR((e.h-h)/2+e.y)+y,
+			ex = IMGFX.tw, ey = IMGFX.th,
+			sx = Clamp(posx, e.x-w2, e.x+e.w-w2),
+			sy = Clamp(posy, e.y-h2, e.y+e.h-h2);
+		
+		if(sx >= e.x) sx = 0; else sx = FLOOR(e.x-sx);
+		if(sy >= e.y) sy = 0; else sy = FLOOR(e.y-sy);
+		
+		if(posx+w > e.x+e.w) ex -= ((e.x+e.w)-(posx+w))/z;
+		if(posy+h > e.y+e.h) ey -= ((e.y+e.h)-(posy+h))/z;
+		
+		this.sx = sx;
+		this.sy = sy;
+		
+		IMGFX.Zoom(this.zoom, sx, sy);
+		Update();
+	},
 	draw: function(ctx) {
 		if(!this.open) return;
 		
@@ -831,19 +937,28 @@ ImageArea = {
 			this.img = LoadImageData(this.tempimg);
 			delete this.tempimg;
 			
-			IMGFX.SetTarget(this.img);
+			IMGFX.SetTarget(CloneImg(this.img));
 			IMGFX.AddHistory("Open");
 		}
 		
-		//this.zoom = GetScaleToFit(this.img.width, this.img.height, EditArea.w, EditArea.h);
-
-		this.w = Clamp(EditArea.w, 0, this.img.width);
-		this.h = Clamp(EditArea.h, 0, this.img.height);
+		var e = EditArea, iw = this.w = this.img.width, ih = this.h = this.img.height, iw2 = (iw/2), ih2 = (ih/2);
 		
-		this.x = Clamp(FLOOR((EditArea.w-this.w)/2+EditArea.x), EditArea.x, EditArea.w);
-		this.y = Clamp(FLOOR((EditArea.h-this.h)/2+EditArea.y), EditArea.y, EditArea.h);
+		this.x = Clamp(FLOOR((e.w-iw)/2+e.x)+this.off_x, e.x, e.x+e.w-iw);
+		this.y = Clamp(FLOOR((e.h-ih)/2+e.y)+this.off_y, e.y, e.y+e.h-ih);
 		
-		ctx.putImageData(this.img, this.x, this.y, 0, 0, this.w, this.h);
+		ctx.putImageData(this.img, this.x, this.y, 0, 0, iw, ih);
+		
+		// Draw UV maps
+		if(this.UVs) {
+			ctx.lineWidth = 1;
+			ctx.strokeStyle = BLK;
+			ctx.fillStyle = rgba(128, 128, 128, 92);
+			var v = 0, vw = FLOOR(IMGFX.tw*this.zoom), vh = FLOOR(IMGFX.th*this.zoom), vx = FLOOR((e.w-vw)/2+e.x), vy = FLOOR((e.h-vh)/2+e.y);
+			for(var i = 0; i < this.UVs.length; i += 6) {	
+				DrawTriangle(ctx, vx+(this.UVs[i]*vw), vy+(this.UVs[i+1]*vh), vx+(this.UVs[i+2]*vw), vy+(this.UVs[i+3]*vh), vx+(this.UVs[i+4]*vw), vy+(this.UVs[i+5]*vh), true, true);
+				v++;
+			}
+		}
 		
 		// Draw selection mask
 		var sel = IMGFX.selection;
@@ -854,14 +969,14 @@ ImageArea = {
 		ctx.lineWidth = 1;
 		
 		// Draw temporary selection
-		if(EditArea.selecting) {
-			sel = EditArea.selectArea;
+		if(e.selecting) {
+			sel = e.selectArea;
 			ctx.strokeStyle = WHT;
 			ctx.strokeRect(sel.x, sel.y, sel.x2-sel.x, sel.y2-sel.y);
 		}
 		
 		// Draw temp path
-		var p = EditArea.path, i = 0;
+		var p = e.path, i = 0;
 		ctx.strokeStyle = BLK;
 		for(; i < p.length-2; i+=2) {
 			DrawLine(ctx, this.x+p[i], this.y+p[i+1], this.x+p[i+2], this.y+p[i+3]);
@@ -1013,10 +1128,10 @@ ToolBox = {
 	h: 0,
 	
 	// The box of tools
-	tools: [new Tool("Move"), new Tool("Box Select"), new Tool("Lasso"), new Tool("Color Select"),
-	new Tool("Crop"), new Tool("Color Pick"), new Tool("Healing Brush"), new Tool("Brush"),
-	new Tool("Stamp"), new Tool("History Brush"), new Tool("Erase"), new Tool("Fill"),
-	new Tool("Sharpen"), new Tool("Burn"), new Tool("Pen"), new Tool("Text"),
+	tools: [new Tool("Move"), new Tool("Box Select", true), new Tool("Lasso"), new Tool("Color Select"),
+	new Tool("Crop"), new Tool("Color Pick", true), new Tool("Healing Brush"), new Tool("Brush", true),
+	new Tool("Stamp"), new Tool("History Brush"), new Tool("Erase", true), new Tool("Fill"),
+	new Tool("Sharpen"), new Tool("Burn"), new Tool("Pen", true), new Tool("Text"),
 	new Tool("Select"), new Tool("Line"), new Tool("Grab"), new Tool("Zoom")],
 	
 	// The active tool
@@ -1072,19 +1187,7 @@ ToolBox = {
 	setTool: function(t) {
 		if(this.active != t) {
 			if(t.name == "Brush" || t.name == "Erase") {
-				//var erase = t.name == "Erase";
-				t.data = {brush: [Brushes.get(1, 100), Brushes.get(2, 75), Brushes.get(2, 50)]};
-				/*var t1 = T();
-				for(var i = 0; i < 1000; i++) {
-					IMGFX.ApplyBrush(FLOOR(Math.random()*ImageArea.w), FLOOR(Math.random()*ImageArea.h), t.data.brush[FLOOR(Math.random()*3)], erase);
-				}
-				if(erase)
-					IMGFX.AddHistory("Eraser Test");
-				else
-					IMGFX.AddHistory("Brush Test");
-				Update();
-					
-				CL("Test: "+(T()-t1));*/	
+				t.data = {brush: [Brushes.get(1, 50), Brushes.get(0, 50), Brushes.get(2, 50)]};
 			}
 			this.active = t;
 		}
@@ -1115,10 +1218,11 @@ ToolBox = {
 
 
 /* Tool icon and data */
-function Tool(name) {
+function Tool(name, active) {
 	this.name = name,
 	this.w = 30,
 	this.h = 30,
+	this.active = active,	// Active in this case means it has functionality
 	this.data = [],
 	this.set = function(x, y) {
 		this.x = x;
@@ -1130,10 +1234,11 @@ function Tool(name) {
 	},
 	this.icon = this.loadIcon(),
 	this.draw = function(ctx) {
-		ToolBox.highlight == this ? ctx.fillStyle = BG6 : ctx.fillStyle = BG5;
+		
+		this.active && ToolBox.highlight == this ? ctx.fillStyle = BG6 : ctx.fillStyle = BG5;
 		ctx.fillRect(this.x, this.y, this.w, this.h);
-		if(this.icon && this.icon.loaded) {
-			ctx.drawImage(this.icon, this.x+3, this.y+3, this.w-6, this.h-6);
+		if(this.icon && this.icon.loaded) {			
+			ctx.drawImage(this.active ? this.icon : ERROR_IMG, this.x+3, this.y+3, this.w-6, this.h-6);
 		}
 	};
 }
@@ -1386,7 +1491,7 @@ Brushes = {
 			var c = GC(imgcan);
 			c.drawImage(brush, 0, 0, s, s);
 			
-			return c.getImageData(0, 0, s, s);			
+			return {imgdata: c.getImageData(0, 0, s, s), index: index};
 		}
 	}
 }
@@ -1412,10 +1517,10 @@ function DrawEditor() {
 	
 	// This is the proper rendering order
 	// Screwing with this may draw things wrong
-	BG.draw(ctx);
-	ToolBox.draw(ctx);
 	EditArea.draw(ctx);
 	ImageArea.draw(ctx);
+	BG.draw(ctx);
+	ToolBox.draw(ctx);
 	HistoryBox.draw(ctx);
 	LayersBox.draw(ctx);
 	MenuBar.draw(ctx);
@@ -1423,12 +1528,7 @@ function DrawEditor() {
 	Tooltip.draw(ctx);
 	
 	// DEBUG: draw this on top of everything
-	FrameNum.draw(ctx);
-	
-	/*if(ImageArea.open) {
-		IMGFX.Fuzzify(FUZZAMT);
-		Update();
-	}*/
+	if(LOCAL) FrameNum.draw(ctx);
 	
 	requestAnimationFrame(DrawEditor);
 	

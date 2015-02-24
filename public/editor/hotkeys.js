@@ -55,6 +55,9 @@ function DefaultHotkeys() {
 	SetHotkey("ctrl+w", "CloseImage");
 	SetHotkey("ctrl+shift+z", "Redo");
 	SetHotkey("ctrl+z", "Undo");
+	SetHotkey("ctrl+=", "ZoomIn");
+	SetHotkey("ctrl+-", "ZoomOut");
+	SetHotkey("ctrl+0", "ResetZoom");
 }
 
 function HK_CloseImage() {
@@ -99,6 +102,18 @@ function HK_View3D() {
 	PBOX.View3D.open();
 }
 
+function HK_ZoomIn() {
+	ImageArea.setZoom("in");
+}
+
+function HK_ZoomOut() {
+	ImageArea.setZoom("out");
+}
+
+function HK_ResetZoom() {
+	ImageArea.setZoom(1);
+}
+
 // Hotkeys object
 // These can be changed by the user in the Hotkeys window
 HK = {
@@ -114,7 +129,10 @@ HK = {
 		Rotate: new Hotkey(HK_Rotate, "Rotate Image", "Rotate the image 90 degrees clockwise."),
 		AutoContrast: new Hotkey(HK_AutoContrast, "Auto Contrast", "Automatic contrast and color adjustment."),
 		InvertColors: new Hotkey(HK_InvertColors, "Invert Colors", "Invert the RGB colors of the image."),
-		View3D: new Hotkey(HK_View3D, "3D View", "Open the 3D View window.")
+		View3D: new Hotkey(HK_View3D, "3D View", "Open the 3D View window."),
+		ZoomIn: new Hotkey(HK_ZoomIn, "Zoom In", "Zoom into the image 10% more."),
+		ZoomOut: new Hotkey(HK_ZoomOut, "Zoom Out", "Zoom into the image 10% less."),
+		ResetZoom: new Hotkey(HK_ResetZoom, "Reset Zoom", "Reset zoom to 100%.")
 	},
 	
 	// Temporary hotkey input
