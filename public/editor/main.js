@@ -778,15 +778,15 @@ EditArea = {
 			var bd = ToolBox.getData();
 			
 			if(this.mouseDown) {
-				if(type == "move") {
+				if(type == "move" || type == "down") {
 					x -= ImageArea.x;
 					y -= ImageArea.y;
 					
-					var z = ImageArea.zoom;
-					
-					IMGFX.ApplyBrush(CEIL(x/z), CEIL(y/z), MainColors.fg, bd.brush[0].imgdata, ToolBox.active.name == "Erase");
+					IMGFX.ApplyBrush(CEIL(x/ZOOM), CEIL(y/ZOOM), MainColors.fg, bd.brush[0].imgdata, ToolBox.active.name == "Erase");
 					Update();
-				} else if(type == "up") {
+				}
+			} else {
+				if(type == "up") {
 					IMGFX.AddHistory(ToolBox.active.name);
 					Update();
 				}
@@ -853,7 +853,7 @@ EditArea = {
 };
 
 /* The image area */
-/* Overlays such as selections, UV maps, and other image helpers are drawn here */
+/* Overlays such as selections and other image helpers are drawn here */
 ImageArea = {
 	x: 0,
 	y: 0,
@@ -863,33 +863,11 @@ ImageArea = {
 	sy: 0,		// Image drawing offset y
 	off_x: 0,	// Grab offset x
 	off_y: 0,	// Grab offset y
-	zoom: 1,
 	open: false,
 	tempimg: undefined,
 	img: undefined,
-	UVs: undefined,
-	dumpUVs: function(g) {
-		if(g && g.faceVertexUvs) {
-			var fvu = g.faceVertexUvs, i = 0, j = 0, k = 0;
-			
-			this.UVs = [];
-			
-			// Vertex groups
-			for(; i < fvu.length; i++) {
-				// Faces
-				for(j = 0; j < fvu[i].length; j++) {
-					// Vertices
-					for(k = 0; k < 3; k++) {
-						this.UVs.push(fvu[i][j][k].x, fvu[i][j][k].y);
-					}
-				}
-			}
-			
-			Update();
-		}
-	},
 	setOffset: function(x, y) {
-		/*var e = EditArea, w2 = CEIL((IMGFX.tw/2)*this.zoom), h2 = CEIL((IMGFX.th/2)*this.zoom);
+		/*var e = EditArea, w2 = CEIL((IMGFX.tw/2)*ZOOM), h2 = CEIL((IMGFX.th/2)*ZOOM);
 		this.off_x = Clamp(x, e.x-w2, e.x+e.w-w2);
 		this.off_y = Clamp(y, e.y-h2, e.y+e.h-h2);*/
 		this.off_x = x;
@@ -898,18 +876,19 @@ ImageArea = {
 	},
 	setZoom: function(value) {
 		if(value == "in")
-			value = this.zoom + (this.zoom >= 1 ? 1 : 0.1);
+			value = ZOOM + (ZOOM >= 1 ? (ZOOM >= 4 ? 1 : 0.5) : 0.1);
 		else if(value == "out")
-			value = this.zoom - (this.zoom > 1 ? 1 : 0.1);
+			value = ZOOM - (ZOOM > 1 ? (ZOOM >= 4 ? 1 : 0.5) : 0.1);
 		
-		this.zoom = Clamp(value, 0.05, 16);
+		ZOOM = Clamp(value, 0.05, 16);
 		this.update();
 	},
 	update: function() {
+		if(!this.img) return;
 		
 		/* This code is a mess - do something! */
 		
-		var x = this.off_x, y = this.off_y, e = EditArea, z = this.zoom, w = IMGFX.tw*z, h = IMGFX.th*z, w2 = CEIL(w/2), h2 = CEIL(h/2), posx = FLOOR((e.w-w)/2+e.x)+x, posy = FLOOR((e.h-h)/2+e.y)+y,
+		var x = this.off_x, y = this.off_y, e = EditArea, z = ZOOM, w = IMGFX.tw*z, h = IMGFX.th*z, w2 = CEIL(w/2), h2 = CEIL(h/2), posx = FLOOR((e.w-w)/2+e.x)+x, posy = FLOOR((e.h-h)/2+e.y)+y,
 			ex = IMGFX.tw, ey = IMGFX.th,
 			sx = Clamp(posx, e.x-w2, e.x+e.w-w2),
 			sy = Clamp(posy, e.y-h2, e.y+e.h-h2);
@@ -923,7 +902,7 @@ ImageArea = {
 		this.sx = sx;
 		this.sy = sy;
 		
-		IMGFX.Zoom(this.zoom, sx, sy);
+		IMGFX.Zoom(ZOOM, sx, sy);
 		Update();
 	},
 	draw: function(ctx) {
@@ -948,18 +927,6 @@ ImageArea = {
 		
 		ctx.putImageData(this.img, this.x, this.y, 0, 0, iw, ih);
 		
-		// Draw UV maps
-		if(this.UVs) {
-			ctx.lineWidth = 1;
-			ctx.strokeStyle = BLK;
-			ctx.fillStyle = rgba(128, 128, 128, 92);
-			var v = 0, vw = FLOOR(IMGFX.tw*this.zoom), vh = FLOOR(IMGFX.th*this.zoom), vx = FLOOR((e.w-vw)/2+e.x), vy = FLOOR((e.h-vh)/2+e.y);
-			for(var i = 0; i < this.UVs.length; i += 6) {	
-				DrawTriangle(ctx, vx+(this.UVs[i]*vw), vy+(this.UVs[i+1]*vh), vx+(this.UVs[i+2]*vw), vy+(this.UVs[i+3]*vh), vx+(this.UVs[i+4]*vw), vy+(this.UVs[i+5]*vh), true, true);
-				v++;
-			}
-		}
-		
 		// Draw selection mask
 		var sel = IMGFX.selection;
 		if(sel && sel.img) {
@@ -980,6 +947,161 @@ ImageArea = {
 		ctx.strokeStyle = BLK;
 		for(; i < p.length-2; i+=2) {
 			DrawLine(ctx, this.x+p[i], this.y+p[i+1], this.x+p[i+2], this.y+p[i+3]);
+		}
+	}
+};
+
+/* UV mapping overlay */
+UVMap = {
+	x: 0,
+	y: 0,
+	w: 0,
+	h: 0,
+	UVs: undefined,			// Array of all UVs
+	UVxy: undefined,		// Array of UV coordinates
+	selectedUVs: undefined,	// Array of selected UV indices
+	//UVdots: undefined,		// Array of positions to draw selection squares (saves drawing time)
+	
+	dumpUVs: function(g) {
+		if(g && g.faceVertexUvs) {
+			var fvu = g.faceVertexUvs, i = 0, j = 0, k = 0;
+			
+			this.UVs = [];
+			
+			// Vertex groups
+			for(; i < fvu.length; i++) {
+				// Faces
+				for(j = 0; j < fvu[i].length; j++) {
+					// Vertices
+					for(k = 0; k < 3; k++) {
+						this.UVs.push(fvu[i][j][k].x, fvu[i][j][k].y);
+					}
+				}
+			}
+			
+			// Setup xy coordinate and selection arrays
+			this.UVxy = new Uint16Array(this.UVs.length);
+			this.selectedUVs = new Uint8ClampedArray(this.UVs.length/2);
+			
+			Update();
+		}
+	},
+	clearUVs: function() {
+		delete this.UVs;
+		delete this.UVxy;
+		delete this.selectedUVs;
+		//delete this.UVdots;
+	},
+	selectAll: function() {
+		if(this.UVs) {
+			this.selectedUVs.fill(1);
+			//this.plotDots();
+			Update();
+		}
+	},
+	detect: function(x, y, type) {
+		
+		if(!WB(x, y, EditArea)) return;
+		
+		if(type == "click" && this.UVs) {
+			
+			// Only select a UV within 'min' radius
+			var min = 10*ZOOM, i = 0, rad, su = this.selectedUVs, sel = [];
+			
+			//this.UVdots = [];
+			
+			//su.fill(0);
+			for(; i < this.UVxy.length; i += 2) {
+				
+				rad = SQRT(POW(this.UVxy[i]-x, 2)+POW(this.UVxy[i+1]-y, 2));
+				
+				if(rad <= min) {
+					if(rad < min) {
+						//su.fill(0);
+						sel = [];
+						//this.UVdots = [this.UVxy[i], this.UVxy[i+1]];
+					}
+					//su[i/2] = 1;
+					sel.push(i/2);
+					min = rad;
+				}
+			}
+			
+			// Toggle selections
+			for(i = 0; i < sel.length; i++) {
+				su[sel[i]] = !su[sel[i]];
+			}
+			Update();
+		}
+	},
+	draw: function(ctx) {
+		// Draw UV maps
+		if(this.UVs) {
+			
+			var e = EditArea, su = this.selectedUVs, vw = FLOOR(IMGFX.tw*ZOOM), vh = FLOOR(IMGFX.th*ZOOM), vx = FLOOR((e.w-vw)/2+e.x), vy = FLOOR((e.h-vh)/2+e.y), clr = rgba(128, 128, 128, 92), sel = rgba(128, 128, 160, 128),
+				i = 0, j = 0, x0, y0, x1, y1, x2, y2, v = 0, triSelected = false, allOrNone = false, grad;
+			
+			ctx.lineWidth = 1;
+			ctx.strokeStyle = BLK;
+			ctx.fillStyle = clr;
+			for(; i < this.UVs.length; i += 6) {
+				this.UVxy[i] = x0 = vx+(this.UVs[i]*vw);
+				this.UVxy[i+1] = y0 = vy+(this.UVs[i+1]*vh);
+				this.UVxy[i+2] = x1 = vx+(this.UVs[i+2]*vw);
+				this.UVxy[i+3] = y1 = vy+(this.UVs[i+3]*vh);
+				this.UVxy[i+4] = x2 = vx+(this.UVs[i+4]*vw);
+				this.UVxy[i+5] = y2 = vy+(this.UVs[i+5]*vh);
+				
+				// Is entire triangle selected?
+				triSelected = (su[j] && su[j+1] && su[j+2]);
+				
+				// Are all the verts either selected or deselected?
+				allOrNone = (su[j] == su[j+1] && su[j+1] == su[j+2]);
+				
+				// One or two verts selected
+				if(!allOrNone) {
+					// Line 1
+					ctx.beginPath();
+					ctx.moveTo(x0, y0);
+					ctx.strokeStyle = (su[j] || su[j+1] ? WHT : BLK);
+					ctx.lineTo(x1, y1);
+					ctx.stroke();
+					ctx.closePath();
+					
+					// Line 2
+					ctx.beginPath();
+					ctx.moveTo(x1, y1);
+					ctx.strokeStyle = (su[j+1] || su[j+2] ? WHT : BLK);
+					ctx.lineTo(x2, y2);
+					ctx.stroke();
+					ctx.closePath();
+					
+					// Line 3
+					ctx.beginPath();
+					ctx.moveTo(x2, y2);
+					ctx.strokeStyle = (su[j] || su[j+2] ? WHT : BLK);
+					ctx.lineTo(x0, y0);
+					ctx.stroke();
+					ctx.closePath();
+				}
+				
+				// Draw triangle
+				ctx.beginPath();
+				ctx.moveTo(x0, y0);
+				ctx.lineTo(x1, y1);
+				ctx.lineTo(x2, y2);
+				ctx.lineTo(x0, y0);
+				// Only stroke triangle if all verts are selected or deselected
+				if(allOrNone) {
+					ctx.strokeStyle = (triSelected ? WHT : BLK);
+					ctx.stroke();
+				}
+				ctx.fillStyle = (triSelected ? sel : clr);
+				ctx.fill();				
+				ctx.closePath();
+				
+				j += 3;			
+			}
 		}
 	}
 };
@@ -1519,6 +1641,7 @@ function DrawEditor() {
 	// Screwing with this may draw things wrong
 	EditArea.draw(ctx);
 	ImageArea.draw(ctx);
+	UVMap.draw(ctx);
 	BG.draw(ctx);
 	ToolBox.draw(ctx);
 	HistoryBox.draw(ctx);

@@ -172,11 +172,7 @@ IMGFX = {
 			
 			// I need to convert the image data to an image object or else
 			// the alpha doesn't blend when the selection is drawn
-			var selcan = document.createElement("canvas");
-			selcan.width = s.w;
-			selcan.height = s.h;
-			GC(selcan).putImageData(s.img, 0, 0);
-			s.img = IMG(selcan.toDataURL("image/png"));
+			s.img = IMG(DataURL(s.img));
 		}
 	},
 	
@@ -1196,7 +1192,7 @@ IMGFX = {
 		// Only create a new image container if we need to
 		if(img.width != dx || img.height != dy) ImageArea.img = ImageData(dx, dy);
 		
-		var d = ImageArea.img.data, pw = w*4, dl = dx*dy*4, i = 0, px = sx, py = sy, s = FLOOR(amti*py)*pw;
+		var d = ImageArea.img.data, pw = w*4, dl = dx*dy*4, i = 0, px = sx, py = sy, s = FLOOR(amti*py)*pw, p;
 		
 		dx += sx;
 	
@@ -1247,7 +1243,7 @@ IMGFX = {
 		
 		ImageArea.img = img;
 		ImageArea.open = true;
-		ImageArea.zoom = 1;
+		ZOOM = 1;
 		IMGFX.SetTarget(CloneImg(ImageArea.img));
 		Update();
 		return t1;

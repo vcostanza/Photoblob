@@ -954,18 +954,16 @@ PBOX_View3D = PBOX_Base.extend({
 		
 		// I can't (as far as I know) send raw image data directly to a texture
 		// So I have to convert it to a data url first		
-		var r = this.renderer, rd = r.domElement, can = document.createElement("canvas");
-		can.width = ImageArea.w;
-		can.height = ImageArea.h;
-		GC(can).putImageData(ImageArea.img, 0, 0);
+		var r = this.renderer, rd = r.domElement;
 			
 		// Then load the texture that way
-		var texture = new THREE.ImageUtils.loadTexture(can.toDataURL("image/png"));
+		var texture = new THREE.ImageUtils.loadTexture(DataURL(IMGFX.target));
 		
 		// Create mesh if it doesn't exist, otherwise just update the map
-		if(!this.mesh) {	
+		if(!this.mesh) {
 			this.material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
 			this.mesh = new THREE.Mesh(new THREE.SphereGeometry(200, 16, 12), this.material);
+			this.mesh.rotation.y = -1.5;	// Face toward camera
 			this.scene.add(this.mesh);
 		} else {
 			this.material.map = texture;
@@ -991,11 +989,11 @@ PBOX_View3D = PBOX_Base.extend({
 		
 		// Dump UVs button
 		if(this.b_dump.detect(x, y, type)) {
-			ImageArea.dumpUVs(this.mesh.geometry);
+			UVMap.dumpUVs(this.mesh.geometry);
 			
 		// Clear UVs button
 		} else if(this.b_clear.detect(x, y, type)) {
-			ImageArea.UVs = null;
+			UVMap.clearUVs();
 			Update();
 		}
 		

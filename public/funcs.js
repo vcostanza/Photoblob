@@ -27,10 +27,12 @@ CurrentTheme = 0;
 /* Drawing update vars */
 MouseX = 0;
 MouseY = 0;
+CTRL = false;
 LastUpdate = 0;
 Frame = 0;
 Icons = [];
 FocusObj = undefined;
+ZOOM = 1;
 
 // Fullscreen state
 InFullscreen = false;
@@ -46,7 +48,7 @@ NODE_SERVER = "";
 LOCAL = (window.location.host == "" || window.location.host == "localhost");
 
 // Math function aliases
-ABS = Math.abs, MAX = Math.max, MIN = Math.min, CEIL = Math.ceil, FLOOR = Math.floor, ROUND = Math.round;
+ABS = Math.abs, MAX = Math.max, MIN = Math.min, CEIL = Math.ceil, FLOOR = Math.floor, ROUND = Math.round, POW = Math.pow, SQRT = Math.sqrt;
 
 /* Array copy I would make this an Array.prototype function but that usually breaks everything, so let's play it safe */
 function ARCPY(arr) {
@@ -363,18 +365,28 @@ function MouseDetect(event) {
 		else if(event.wheelDelta) type = event.wheelDelta > 0 ? "wheelup" : "wheeldown";
 	}
 	
+	// Zoom with ctrl + scroll wheel
+	if(CTRL && type.indexOf("wheel") == 0) {
+		if(type == "wheelup") ImageArea.setZoom("in");
+		else if(type == "wheeldown") ImageArea.setZoom("out");
+		event.preventDefault();
+		event.stopPropagation();
+		return;
+	}
+	
 	if(!PBOX.detect(x, y, type)) {
 		if(!MenuBar.detect(x, y, type)) {
 			ToolBox.detect(x, y, type);
-			HistoryBox.detect(x, y, type);		
+			HistoryBox.detect(x, y, type);
 			EditArea.detect(x, y, type);
+			UVMap.detect(x, y, type);
 		}
 	}
 }
 
 /* Detect keyboard events */
 function Hotkeys(event) {
-	var ct = event.ctrlKey, k = event.key ? event.key.toLowerCase() : String.fromCharCode(event.charCode+(ct?96:0)).toLowerCase(), sh = event.shiftKey, alt = event.altKey, hk = false;
+	var ct = CTRL = event.ctrlKey, k = event.key ? event.key.toLowerCase() : String.fromCharCode(event.charCode+(ct?96:0)).toLowerCase(), sh = event.shiftKey, alt = event.altKey, hk = false;
 	
 	// Non-alphanumeric keys (legacy only)
 	if(event.key == null && event.charCode == 0) {
@@ -837,6 +849,7 @@ function OpenImage(src, name) {
 	var img = IMG(src);
 	ImageArea.open = true;
 	ImageArea.tempimg = img;
+	ImageArea.setZoom(1);
 	
 	document.title = "Photoblob - ["+name+"]";
 }
@@ -847,11 +860,12 @@ function NewImage(w, h) {
 	if(isNaN(w)) w = 128;
 	if(isNaN(h)) h = 128;
 	
-	CloseImage();	
+	CloseImage();
 	ImageArea.open = true;
-	ImageArea.img = GC(canvas).createImageData(w, h);	
-	IMGFX.SetTarget(ImageArea.img);
+	ImageArea.img = ImageData(w, h);
+	IMGFX.SetTarget(ImageData(w, h));
 	IMGFX.AddHistory("New");
+	ImageArea.setZoom(1);
 	document.title = "Photoblob - [newimage.png]";
 }
 
@@ -860,10 +874,22 @@ function CloseImage() {
 	if(ImageArea.open) {
 		IMGFX.ClearHistory();
 		delete ImageArea.img;
+		delete IMGFX.target;
 		ImageArea.open = false;
 		document.title = "Photoblob - A Blobware Project";
 		Update();
 	}
+}
+
+/* Convert image data to base64 data url */
+function DataURL(img, mimetype) {
+	if(img == null || img.data == null) return;
+	
+	var can = document.createElement("canvas");
+	can.width = img.width;;
+	can.height = img.height;
+	GC(can).putImageData(img, 0, 0);
+	return can.toDataURL(mimetype == null ? "image/png" : mimetype);
 }
 
 /* Load image data */
@@ -882,7 +908,7 @@ function LoadImageData(img) {
 /* Save image data */
 function ExportImage() {
 
-	var img = ImageArea.img, eimg = E("e-img"), econt = E("export-img"), emsg = E("e-msg"), eload = E("e-load");
+	var img = IMGFX.target, eimg = E("e-img"), econt = E("export-img"), emsg = E("e-msg"), eload = E("e-load"), elink = E("e-link");
 	if(!img || !eimg || !econt) return;
 	
 	var w = img.width, h = img.height, cW = window.innerWidth, cH = window.innerHeight,
@@ -901,12 +927,17 @@ function ExportImage() {
 	
 	// Convert canvas to image
 	imgcan.width = w;
-	imgcan.height = h;	
+	imgcan.height = h;
 	GC(imgcan).putImageData(img, 0, 0);
 	
+	// Preview image
 	eimg.src = imgcan.toDataURL(document.title.indexOf(".jpg]") > -1 || document.title.indexOf(".jpeg]") > -1 ? "image/jpeg" : "image/png", 1.0);
 	eimg.width = eper*w;
 	eimg.height = eper*h;
+	
+	// Download link
+	elink.href = eimg.src;
+	elink.setAttribute("download", eimg.src);
 	
 	// Center image	
 	iX = (cW/2)-(eimg.width/2), iY = (cH/2)-(eimg.height/2);
