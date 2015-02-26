@@ -114,6 +114,18 @@ function HK_ResetZoom() {
 	ImageArea.setZoom(1);
 }
 
+function HK_SelectAll() {
+	IMGFX.SEL_All();
+}
+
+function HK_SelectNone() {
+	IMGFX.SEL_Clear();
+}
+
+function HK_InvertSelect() {
+	IMGFX.SEL_Invert();
+}
+
 // Hotkeys object
 // These can be changed by the user in the Hotkeys window
 HK = {

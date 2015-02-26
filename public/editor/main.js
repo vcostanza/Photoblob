@@ -39,7 +39,7 @@ Box = Class.extend({
 	
 	// Toggle active state
 	toggle: function(t) {
-		if(t == undefined) {
+		if(t == null) {
 			this.active = !this.active;
 			Update();
 		} else if(this.active != t) {
@@ -147,10 +147,10 @@ MenuItem = Class.extend({
 		this.name = name;
 		
 		// Caller isn't specified
-		if(func == undefined) {
+		if(func == null) {
 			
 			// Function isn't specified
-			if(caller == undefined) {
+			if(caller == null) {
 				caller = function() {
 					CL("Function not specified for '"+name+"'");
 				}
@@ -183,7 +183,7 @@ Button = Box.extend({
 	},
 	detect: function(x, y, type) {
 		if(this.active && WB(x, y, this)) {
-			if(type == "click") {
+			if(type == "up") {
 				this.state = 0;
 				Update();
 				return true;
@@ -252,7 +252,7 @@ RadioButton = Box.extend({
 		this.value = value;
 	},
 	devent: function(type) {
-		if(type == "click") this.toggle();
+		if(type == "up") this.toggle();
 	},
 	draw: function(ctx) {
 	
@@ -285,7 +285,7 @@ CheckBox = Box.extend({
 		this.value = value;
 	},
 	devent: function(type) {
-		if(type == "click") this.toggle();
+		if(type == "up") this.toggle();
 	},
 	draw: function(ctx) {
 	
@@ -315,11 +315,10 @@ Slider = Box.extend({
 	},
 	detect: function(x, y, type) {
 		if(type != "move") {
-			if(WB(x, y, this) || (type == "up" && this.held)) {
+			if(WB(x, y, this) || (!MDOWN && this.held)) {
 				var v = this.value;
 				this.value = Clamp((x-this.x)/(this.w), 0, 1);
-				if(type == "down") this.held = true;
-				else if(type == "up") this.held = false;
+				this.held = MDOWN;
 			}
 		} else if(this.held) {
 			this.value = Clamp((x-this.x)/(this.w), 0, 1);
@@ -385,7 +384,7 @@ TextBox = Box.extend({
 	},
 	detect: function(x, y, type) {
 		
-		if(type == "click" && !WB(x, y, this)) return;
+		if(type == "up" && !WB(x, y, this)) return;
 		
 		switch(type) {
 			
@@ -393,7 +392,7 @@ TextBox = Box.extend({
 				if(WB(x, y, this)) SC("text");
 				break;
 			
-			case "click":
+			case "up":
 				FocusObj = this;
 				var ctx = GC(canvas);
 				ctx.font = (this.h-4)+"px "+F1;
@@ -481,7 +480,7 @@ HyperLink = Label.extend({
 		
 		if(this.active) {	
 			// Open href in new tab
-			if(type == "click") {
+			if(type == "up") {
 				window.open(this.href, "_blank");
 				window.focus();
 			} else if(type == "move") {
@@ -576,7 +575,7 @@ ColorBox = Box.extend({
 		this.value = [0, 0, 0, 255];
 	},
 	devent: function(type) {
-		if(type == "click")
+		if(type == "up")
 			PBOX.ColorBox.open(this, this.setColor, this.getColor());
 	},
 	onChange: function() {
@@ -692,21 +691,19 @@ EditArea = {
 	grabY: 0,
 	path: [],
 	path_last: 0,
-	mouseDown: false,
 	toggle: false,
 	selecting: false,
 	
 	detect: function(x, y, type) {
 	
-		if(!WB(x, y, this) || PBOX.open) {
-			return;
-		}
-		
-		if(type == "down") this.mouseDown = true;
-		else if(type == "up") this.mouseDown = false;
+		var tool = ToolBox.get();
 	
-		if(ToolBox.get("Box Select") && ImageArea.open) {
-			if(type == "click") return;
+		if(!tool || !WB(x, y, this) || PBOX.open)
+			return;
+			
+		var icoords = ImageArea.getXY(x, y), ix = icoords[0], iy = icoords[1];
+	
+		if(tool == "Box Select" && ImageArea.open) {
 			
 			// Clear existing pen path
 			if(this.path.length > 0) {
@@ -722,12 +719,12 @@ EditArea = {
 				// Selection complete
 				if(type == "up") {
 					
-					var ix = ImageArea.x, iy = ImageArea.y, img = ImageArea.img;
+					var iw = IMGFX.tw, ih = IMGFX.th;
 					
-					x = Clamp(x-ix, 0, img.width);
-					y = Clamp(y-iy, 0, img.height);
-					s.x = Clamp(s.x-ix, 0, img.width);
-					s.y = Clamp(s.y-iy, 0, img.height);
+					x = Clamp(ix, 0, iw);
+					y = Clamp(iy, 0, ih);
+					s.x = Clamp(s.x, 0, iw);
+					s.y = Clamp(s.y, 0, ih);
 					
 					var sx = (x < s.x ? x : s.x), sy = (y < s.y ? y : s.y);
 					
@@ -736,86 +733,69 @@ EditArea = {
 					
 				// Adjusting selection
 				} else if(type == "move") {
-					s.x2 = x;
-					s.y2 = y;
-					
-				// Increase selection size
-				} else if(type == "wheelup") {
-					s.x = Clamp(s.x-1, 0, EditArea.w);
-					s.y = Clamp(s.y-1, 0, EditArea.h);
-					
-				// Decrease selection size
-				} else if(type == "wheeldown") {
-					s.x = Clamp(s.x+1, 0, EditArea.w);
-					s.y = Clamp(s.y+1, 0, EditArea.h);
+					s.x2 = ix;
+					s.y2 = iy;
 				}
 				Update();
 			} else if(type == "down") {
-				s.x = x;
-				s.y = y;
+				s.x = ix;
+				s.y = iy;
 				this.selecting = true;
 			}
 			SC("crosshair");
-		} else if(ToolBox.get("Color Pick")) {
+		} else if(tool == "Color Pick") {
 			SC("crosshair");
 			if(type == "move") {
 				var ctx = GC(canvas), d = [];
 				if(WB(x, y, ImageArea)) {
-					x -= ImageArea.x;
-					y -= ImageArea.y;
-					d = IMGFX.SampleColor(x, y, 1);
+					d = IMGFX.SampleColor(ix, iy, 1);
 				} else {
 					d = ctx.getImageData(x, y, 1, 1).data;
 				}
 				MainColors.setFG(d);
 				MainColors.drawInside(ctx);
-			} else if(type == "click") {
+			} else if(type == "up") {
 				ToolBox.clear();
 				Update();
 			}
-		} else if(ToolBox.get("Brush") || ToolBox.get("Erase")) {
+		} else if(tool == "Brush" || tool == "Erase" || tool == "Pencil") {
+			if(!WB(x, y, ImageArea)) return;
 			
 			var bd = ToolBox.getData();
 			
-			if(this.mouseDown) {
-				if(type == "move" || type == "down") {
-					x -= ImageArea.x;
-					y -= ImageArea.y;
-					
-					IMGFX.ApplyBrush(CEIL(x/ZOOM), CEIL(y/ZOOM), MainColors.fg, bd.brush[0].imgdata, ToolBox.active.name == "Erase");
-					Update();
-				}
+			if(MDOWN) {				
+				if(tool == "Pencil")
+					IMGFX.ApplyPencil(ix, iy, MainColors.fg, CTRL);
+				else
+					IMGFX.ApplyBrush(ix, iy, MainColors.fg, bd.brush[0].imgdata, tool == "Erase");
+				Update();
 			} else {
 				if(type == "up") {
 					IMGFX.AddHistory(ToolBox.active.name);
 					Update();
 				}
 			}
-		} else if(ToolBox.get("Fill")) {
+			
+		} else if(tool == "Fill") {
 			if(WB(x, y, ImageArea)) {
 				SC("crosshair");
-				if(type == "click") {
-					x -= ImageArea.x;
-					y -= ImageArea.y;
-					IMGFX.Fill(x, y, MainColors.fg, 20);
+				if(type == "up") {
+					IMGFX.Fill(ix, iy, MainColors.fg, 20);
 					Update();
 				}
 			}
-		} else if(ToolBox.get("Pen") && ImageArea.open) {
-			var p = this.path, i = this.path_last*2, imx = ImageArea.x, imy = ImageArea.y;
+		} else if(tool == "Pen" && ImageArea.open) {
+			var p = this.path, i = this.path_last*2;
 			
-			x -= imx;
-			y -= imy;
-			
-			if(type == "click") {
-				p[i] = x;
-				p[i+1] = y;
+			if(type == "up") {
+				p[i] = ix;
+				p[i+1] = iy;
 				this.toggle = !this.toggle;
 				Update();
 				this.path_last++;
 				
 				// Double-click = path done
-				if(i > 4 && p[i-2] == x && p[i-1] == y) {
+				if(i > 4 && p[i-2] == ix && p[i-1] == iy) {
 					p[i] = p[0];
 					p[i+1] = p[1];
 					IMGFX.SEL_SetPoly(ARCPY(p));
@@ -823,19 +803,19 @@ EditArea = {
 					this.path = [];
 				}
 			} else if(type == "move") {
-				p[i] = x;
-				p[i+1] = y;
+				p[i] = ix;
+				p[i+1] = iy;
 				if(i > 0) Update();
 			}
 			SC("crosshair");
-		}/* else if(ToolBox.get("Grab") && ImageArea.open) {
+		}/* else if(tool == "Grab" && ImageArea.open) {
 			SC("grab");
 			
 			if(type == "down") {
 				this.grabX = x;
 				this.grabY = y;
 			}
-			if(this.mouseDown) {
+			if(MDOWN) {
 				SC("grabbing");
 				ImageArea.setOffset(x-this.grabX, y-this.grabY);
 				Update();
@@ -864,8 +844,17 @@ ImageArea = {
 	off_x: 0,	// Grab offset x
 	off_y: 0,	// Grab offset y
 	open: false,
-	tempimg: undefined,
-	img: undefined,
+	tempimg: null,
+	img: null,
+	
+	// Return the transformed x and y of the image area (after zoom and grab)
+	getXY: function(x, y) {
+		var e = EditArea, w = IMGFX.tw*ZOOM, h = IMGFX.th*ZOOM, ix = FLOOR((e.w-w)/2+e.x)+this.off_x, iy = FLOOR((e.h-h)/2+e.y)+this.off_y;
+		
+		return [FLOOR((x-ix)/ZOOM), FLOOR((y-iy)/ZOOM)]
+	},
+	
+	// Set the grab offset
 	setOffset: function(x, y) {
 		/*var e = EditArea, w2 = CEIL((IMGFX.tw/2)*ZOOM), h2 = CEIL((IMGFX.th/2)*ZOOM);
 		this.off_x = Clamp(x, e.x-w2, e.x+e.w-w2);
@@ -874,15 +863,23 @@ ImageArea = {
 		this.off_y = y;
 		this.update();
 	},
-	setZoom: function(value) {
+	
+	// Set zoom value
+	setZoom: function(value) {		
 		if(value == "in")
 			value = ZOOM + (ZOOM >= 1 ? (ZOOM >= 4 ? 1 : 0.5) : 0.1);
 		else if(value == "out")
 			value = ZOOM - (ZOOM > 1 ? (ZOOM >= 4 ? 1 : 0.5) : 0.1);
 		
-		ZOOM = Clamp(value, 0.05, 16);
-		this.update();
+		value = Clamp(value, 0.05, 16);
+		
+		if(value != ZOOM) {
+			ZOOM = value;
+			this.update();
+		}
 	},
+	
+	// Update image area render
 	update: function() {
 		if(!this.img) return;
 		
@@ -920,17 +917,18 @@ ImageArea = {
 			IMGFX.AddHistory("Open");
 		}
 		
-		var e = EditArea, iw = this.w = this.img.width, ih = this.h = this.img.height, iw2 = (iw/2), ih2 = (ih/2);
+		var e = EditArea, w = IMGFX.tw*ZOOM, h = IMGFX.th*ZOOM, iw = this.w = this.img.width, ih = this.h = this.img.height, iw2 = (iw/2), ih2 = (ih/2), x = FLOOR((e.w-w)/2+e.x)+this.off_x, y = FLOOR((e.h-h)/2+e.y)+this.off_y;
 		
-		this.x = Clamp(FLOOR((e.w-iw)/2+e.x)+this.off_x, e.x, e.x+e.w-iw);
-		this.y = Clamp(FLOOR((e.h-ih)/2+e.y)+this.off_y, e.y, e.y+e.h-ih);
+		this.x = Clamp(x, e.x, e.x+e.w-iw);
+		this.y = Clamp(y, e.y, e.y+e.h-ih);
 		
 		ctx.putImageData(this.img, this.x, this.y, 0, 0, iw, ih);
 		
 		// Draw selection mask
 		var sel = IMGFX.selection;
 		if(sel && sel.img) {
-			ctx.drawImage(sel.img, this.x+sel.x, this.y+sel.y, sel.w, sel.h);
+			ctx.drawImage(sel.img[sel.state], x+(sel.x*ZOOM), y+(sel.y*ZOOM), sel.w*ZOOM, sel.h*ZOOM);
+			sel.state = FLOOR(T()/1000) % 2;
 		}
 		
 		ctx.lineWidth = 1;
@@ -939,14 +937,14 @@ ImageArea = {
 		if(e.selecting) {
 			sel = e.selectArea;
 			ctx.strokeStyle = WHT;
-			ctx.strokeRect(sel.x, sel.y, sel.x2-sel.x, sel.y2-sel.y);
+			ctx.strokeRect(x+(sel.x*ZOOM), y+(sel.y*ZOOM), (sel.x2-sel.x)*ZOOM, (sel.y2-sel.y)*ZOOM);
 		}
 		
 		// Draw temp path
 		var p = e.path, i = 0;
 		ctx.strokeStyle = BLK;
 		for(; i < p.length-2; i+=2) {
-			DrawLine(ctx, this.x+p[i], this.y+p[i+1], this.x+p[i+2], this.y+p[i+3]);
+			DrawLine(ctx, x+(p[i]*ZOOM), y+(p[i+1]*ZOOM), x+(p[i+2]*ZOOM), y+(p[i+3]*ZOOM));
 		}
 	}
 };
@@ -957,10 +955,10 @@ UVMap = {
 	y: 0,
 	w: 0,
 	h: 0,
-	UVs: undefined,			// Array of all UVs
-	UVxy: undefined,		// Array of UV coordinates
-	selectedUVs: undefined,	// Array of selected UV indices
-	//UVdots: undefined,		// Array of positions to draw selection squares (saves drawing time)
+	UVs: null,			// Array of all UVs
+	UVxy: null,		// Array of UV coordinates
+	selectedUVs: null,	// Array of selected UV indices
+	//UVdots: null,		// Array of positions to draw selection squares (saves drawing time)
 	
 	dumpUVs: function(g) {
 		if(g && g.faceVertexUvs) {
@@ -1001,27 +999,24 @@ UVMap = {
 	},
 	detect: function(x, y, type) {
 		
-		if(!WB(x, y, EditArea)) return;
+		if(!this.UVs || !WB(x, y, EditArea)) return;
 		
-		if(type == "click" && this.UVs) {
+		if(type == "up") {
 			
 			// Only select a UV within 'min' radius
 			var min = 10*ZOOM, i = 0, rad, su = this.selectedUVs, sel = [];
 			
 			//this.UVdots = [];
 			
-			//su.fill(0);
+			if(!SHIFT) su.fill(0);
 			for(; i < this.UVxy.length; i += 2) {
 				
 				rad = SQRT(POW(this.UVxy[i]-x, 2)+POW(this.UVxy[i+1]-y, 2));
 				
 				if(rad <= min) {
 					if(rad < min) {
-						//su.fill(0);
 						sel = [];
-						//this.UVdots = [this.UVxy[i], this.UVxy[i+1]];
 					}
-					//su[i/2] = 1;
 					sel.push(i/2);
 					min = rad;
 				}
@@ -1039,18 +1034,18 @@ UVMap = {
 		if(this.UVs) {
 			
 			var e = EditArea, su = this.selectedUVs, vw = FLOOR(IMGFX.tw*ZOOM), vh = FLOOR(IMGFX.th*ZOOM), vx = FLOOR((e.w-vw)/2+e.x), vy = FLOOR((e.h-vh)/2+e.y), clr = rgba(128, 128, 128, 92), sel = rgba(128, 128, 160, 128),
-				i = 0, j = 0, x0, y0, x1, y1, x2, y2, v = 0, triSelected = false, allOrNone = false, grad;
+				i = 0, j = 0, k, k2, x = new Float32Array(3), y = new Float32Array(3), v = 0, triSelected = false, allOrNone = false, grad;
 			
 			ctx.lineWidth = 1;
 			ctx.strokeStyle = BLK;
 			ctx.fillStyle = clr;
 			for(; i < this.UVs.length; i += 6) {
-				this.UVxy[i] = x0 = vx+(this.UVs[i]*vw);
-				this.UVxy[i+1] = y0 = vy+(this.UVs[i+1]*vh);
-				this.UVxy[i+2] = x1 = vx+(this.UVs[i+2]*vw);
-				this.UVxy[i+3] = y1 = vy+(this.UVs[i+3]*vh);
-				this.UVxy[i+4] = x2 = vx+(this.UVs[i+4]*vw);
-				this.UVxy[i+5] = y2 = vy+(this.UVs[i+5]*vh);
+				this.UVxy[i] = x[0] = vx+(this.UVs[i]*vw);
+				this.UVxy[i+1] = y[0] = vy+(this.UVs[i+1]*vh);
+				this.UVxy[i+2] = x[1] = vx+(this.UVs[i+2]*vw);
+				this.UVxy[i+3] = y[1] = vy+(this.UVs[i+3]*vh);
+				this.UVxy[i+4] = x[2] = vx+(this.UVs[i+4]*vw);
+				this.UVxy[i+5] = y[2] = vy+(this.UVs[i+5]*vh);
 				
 				// Is entire triangle selected?
 				triSelected = (su[j] && su[j+1] && su[j+2]);
@@ -1059,38 +1054,24 @@ UVMap = {
 				allOrNone = (su[j] == su[j+1] && su[j+1] == su[j+2]);
 				
 				// One or two verts selected
-				if(!allOrNone) {
-					// Line 1
-					ctx.beginPath();
-					ctx.moveTo(x0, y0);
-					ctx.strokeStyle = (su[j] || su[j+1] ? WHT : BLK);
-					ctx.lineTo(x1, y1);
-					ctx.stroke();
-					ctx.closePath();
-					
-					// Line 2
-					ctx.beginPath();
-					ctx.moveTo(x1, y1);
-					ctx.strokeStyle = (su[j+1] || su[j+2] ? WHT : BLK);
-					ctx.lineTo(x2, y2);
-					ctx.stroke();
-					ctx.closePath();
-					
-					// Line 3
-					ctx.beginPath();
-					ctx.moveTo(x2, y2);
-					ctx.strokeStyle = (su[j] || su[j+2] ? WHT : BLK);
-					ctx.lineTo(x0, y0);
-					ctx.stroke();
-					ctx.closePath();
+				if(!allOrNone) {					
+					for(k = 0; k < 3; k++) {
+						k2 = (k == 2 ? 0 : k+1);
+						ctx.beginPath();
+						ctx.moveTo(x[k], y[k]);
+						ctx.strokeStyle = (su[j+k] || su[j+k2] ? WHT : BLK);
+						ctx.lineTo(x[k2], y[k2]);
+						ctx.stroke();
+						ctx.closePath();
+					}
 				}
 				
 				// Draw triangle
 				ctx.beginPath();
-				ctx.moveTo(x0, y0);
-				ctx.lineTo(x1, y1);
-				ctx.lineTo(x2, y2);
-				ctx.lineTo(x0, y0);
+				ctx.moveTo(x[0], y[0]);
+				ctx.lineTo(x[1], y[1]);
+				ctx.lineTo(x[2], y[2]);
+				ctx.lineTo(x[0], y[0]);
 				// Only stroke triangle if all verts are selected or deselected
 				if(allOrNone) {
 					ctx.strokeStyle = (triSelected ? WHT : BLK);
@@ -1112,7 +1093,7 @@ MenuBar = {
 	y: 0,
 	w: 100,
 	h: 30,
-	highlight: undefined,
+	highlight: null,
 	
 	// Menu items
 	items: [new MenuBarItem("File"), new MenuBarItem("Edit"), new MenuBarItem("Image"), new MenuBarItem("Layer"),
@@ -1121,8 +1102,7 @@ MenuBar = {
 	// HIT DETECTION
 	detect: function(x, y, type) {
 	
-		if(!type) type = "click";
-		var item = undefined;
+		var item = null;
 		
 		if(WB(x, y, this)) {
 			for(var i in this.items) {
@@ -1134,9 +1114,8 @@ MenuBar = {
 		}
 		
 		// Menu items
-		if(item) {
-		
-			if(type == "click") {
+		if(item) {		
+			if(type == "up") {
 				if(this.menu == item.menu)
 					this.close(item);
 				else
@@ -1148,7 +1127,7 @@ MenuBar = {
 					this.open(item);
 				this.setHighlight(item);
 			}
-				
+			return false;
 		} else {
 			this.setHighlight();
 		}
@@ -1162,13 +1141,13 @@ MenuBar = {
 				
 				var m = FLOOR((y-menu.y)/(menu.h/opts.length));
 				
-				if(opts[m] == undefined) {
+				if(opts[m] == null) {
 					menu.setHighlight(-1);
-					return;
+					return false;
 				}
 				
 				// Run function on click
-				if(type == "click") {
+				if(type == "up") {
 					
 					// Regular function - caller doesn't matter
 					if(!opts[m].caller) opts[m].func();
@@ -1185,7 +1164,7 @@ MenuBar = {
 				}
 				return true;
 			} else {
-				if(type == "click")
+				if(type == "up")
 					this.close();
 				else if(type == "move")
 					menu.setHighlight(-1);
@@ -1197,11 +1176,12 @@ MenuBar = {
 	},
 	
 	// Menu options
-	menu: undefined,
+	menu: null,
 	
 	close: function() {
-		if(this.menu != undefined) {
-			this.menu = undefined;
+		if(this.menu != null) {
+			this.menu.setHighlight(-1);
+			this.menu = null;
 			Update();
 		}
 	},
@@ -1252,34 +1232,33 @@ ToolBox = {
 	// The box of tools
 	tools: [new Tool("Move"), new Tool("Box Select", true), new Tool("Lasso"), new Tool("Color Select"),
 	new Tool("Crop"), new Tool("Color Pick", true), new Tool("Healing Brush"), new Tool("Brush", true),
-	new Tool("Stamp"), new Tool("History Brush"), new Tool("Erase", true), new Tool("Fill"),
+	new Tool("Stamp"), new Tool("Pencil", true), new Tool("Erase", true), new Tool("Fill"),
 	new Tool("Sharpen"), new Tool("Burn"), new Tool("Pen", true), new Tool("Text"),
 	new Tool("Select"), new Tool("Line"), new Tool("Grab"), new Tool("Zoom")],
 	
 	// The active tool
-	active: undefined,
+	active: null,
 	
 	clear: function() {
-		this.active = undefined;
+		this.active = null;
 	},
 	
 	// Return true if tool is active
-	get: function(tname) {
-		return this.active && this.active.name == tname;
+	get: function() {
+		return (this.active != null ? this.active.name : null);
 	},
 	
 	// Hit detection
 	detect: function(x, y, type) {
 		if(!WB(x, y, this)) {
-			this.setHighlight(undefined);
+			this.setHighlight();
 			return;
 		}
 	
-		if(!type) type = "click";
-		var tool = undefined;
+		var tool = null;
 		
 		for(var i in this.tools) {
-			if(WB(x, y, this.tools[i])) {
+			if(WB(x, y, this.tools[i]) && this.tools[i].active) {
 				tool = this.tools[i];
 				break;
 			}
@@ -1287,10 +1266,13 @@ ToolBox = {
 			
 		// Menu items
 		if(tool) {
-			if(type == "click") this.setTool(tool);
-			if(type == "move") this.setHighlight(tool);
+			if(type == "up") this.setTool(tool);
+			else if(type == "move") {
+				this.setHighlight(tool);
+				Tooltip.set(tool.name, x, y);
+			}
 		} else {
-			this.setHighlight(undefined);
+			this.setHighlight();
 		}
 		
 		MainColors.detect(x, y, type);
@@ -1299,6 +1281,7 @@ ToolBox = {
 	
 	// Highlight used for mouse hover
 	setHighlight: function(h) {
+		if(h != null && !h.active) return;
 		if(this.highlight != h) {
 			this.highlight = h;
 			Update();
@@ -1397,7 +1380,7 @@ MainColors = {
 	},
 	
 	detect: function(x, y, type) {
-		if(type != "click" || !WB(x, y, this)) return;
+		if(type != "up" || !WB(x, y, this)) return;
 		
 		// Foreground color box
 		if(WC(x, y, this.x+10, this.y+10, this.cs, this.cs)) {
@@ -1519,14 +1502,12 @@ HistoryBox = {
 			this.setHighlight(-1);
 			return;
 		}
-	
-		if(!type) type = "click";
 		
 		var l = IMGFX.history.length,
 		item = FLOOR((y-this.y-10)/this.ih)+Clamp(l-FLOOR((this.h-20)/this.ih), 0, l);
 		
 		if(item > -1 && item < l) {
-			if(type == "click")
+			if(type == "up")
 				IMGFX.LoadHistory(item);
 			else if(type == "move")
 				this.setHighlight(item);

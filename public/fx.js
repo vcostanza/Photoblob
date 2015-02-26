@@ -36,6 +36,7 @@ IMGFX = {
 		this.td = img.data;
 		this.tw = img.width;
 		this.th = img.height;
+		this.SEL_Clear();
 	},
 	
 	/*
@@ -47,6 +48,56 @@ IMGFX = {
 		delete this.selection;
 		if(s == null || s.w <= 0 || s.h <= 0 || !IMGFX.target) return false;
 		return true;
+	},
+	
+	/* Remove selection */
+	SEL_Clear: function() {
+		delete this.selection;
+		Update();
+	},
+	
+	/* Select entire image */
+	SEL_All: function() {
+		IMGFX.SEL_SetBox(new Selection(0, 0, IMGFX.tw, IMGFX.th));
+	},
+	
+	/* Remove selection */
+	SEL_Invert: function() {
+		if(this.selection) {
+			
+			var sel = this.selection, sm = sel.mask, w = IMGFX.tw, h = IMGFX.th, sx = Clamp(sel.x, 0, w), sy = Clamp(sel.y, 0, h), sw = Clamp(sx+sel.w, 0, w)-sx, sh = Clamp(sy+sel.h, 0, h)-sy, i = 0;
+			
+			// Error checking
+			if(sw == sx || sh == sy) {
+				IMGFX.SEL_Clear();
+				return;
+			}
+			
+			var s = new Selection(0, 0, IMGFX.tw, IMGFX.th), px = 0, py = 0, j = 0;
+			
+			s.mask = new Uint8ClampedArray(w*h);
+			
+			// Find inverted bounds
+			for(; i < w*h; i++) {
+				if(WC(px, py, sx, sy, sw, sh)) {
+					s.mask[i] = 255-sm[j];
+					j++;
+				} else {
+					s.mask[i] = 255;
+				}
+				px++;
+				if(px == w) {
+					px = 0;
+					py++;
+				}
+			}
+			
+			IMGFX.SEL_SetImage(s);
+			this.selection = s;
+			Update();
+		} else {
+			IMGFX.SEL_All();
+		}
 	},
 	
 	/* Set box selection */
@@ -114,7 +165,7 @@ IMGFX = {
 			for(i = 0; i < bounds.length-1; i++) {
 				
 				// Skip if next pixel is next line
-				if(!(bounds[i] >= s.w && bounds[i] < sl && bounds[i+1]-bounds[i] > 1 && FLOOR(bounds[i]/s.w) == FLOOR(bounds[i+1]/s.w))) {
+				if(!(bounds[i] >= s.w && bounds[i] < sl-s.w && bounds[i+1]-bounds[i] > 1 && FLOOR(bounds[i]/s.w) == FLOOR(bounds[i+1]/s.w))) {
 					inside = false;
 					continue;
 				}
@@ -139,10 +190,12 @@ IMGFX = {
 	/* Set selection draw image */
 	SEL_SetImage: function(s) {
 		if(s.img == null) {
-			s.img = ImageData(s.w, s.h);
+			
+			// Two image states (one inverted) since selections are typically animated
+			s.img = [ImageData(s.w, s.h), ImageData(s.w, s.h)];
 			
 			// Only draw pixels where the border is
-			var sm = s.mask, d = s.img.data, inside = false, dl = s.w*s.h, i = 0, j = 0;
+			var sm = s.mask, d1 = s.img[0].data, d2 = s.img[1].data, inside = false, dl = s.w*s.h, i = 0, j = 0;
 			for(; j < dl; j++) {
 				i = j*4;
 				
@@ -152,27 +205,33 @@ IMGFX = {
 				if(inside) {					
 					// Upcoming empty area or new line
 					if(sm[j+1] == 0 || (j+1) % s.w == 0) {
-						d[i] = d[i+3] = 255;
-						d[i+1] = d[i+2] = 0;
+						d1[i] = d1[i+1] = d1[i+2] = FLOOR(RND()*255);
+						d2[i] = d2[i+1] = d2[i+2] = 255-d1[i];
+						d1[i+3] = d2[i+3] = 255;
 						inside = false;
 					// Top or bottom is empty
 					} else if(!(sm[j+s.w] && sm[j-s.w])) {
-						d[i+1] = d[i+3] = 255;
-						d[i] = d[i+2] = 0;
+						d1[i] = d1[i+1] = d1[i+2] = FLOOR(RND()*255);
+						d2[i] = d2[i+1] = d2[i+2] = 255-d1[i];
+						d1[i+3] = d2[i+3] = 255;
 					}
 				} else {
 					// Inside selection
 					if(sm[j] > 0) {
-						d[i] = d[i+3] = 255;
-						d[i+1] = d[i+2] = 0;
+						d1[i] = d1[i+1] = d1[i+2] = FLOOR(RND()*255);
+						d2[i] = d2[i+1] = d2[i+2] = 255-d1[i];
+						d1[i+3] = d2[i+3] = 255;
 						inside = true;
 					}
 				}
 			}
 			
-			// I need to convert the image data to an image object or else
-			// the alpha doesn't blend when the selection is drawn
-			s.img = IMG(DataURL(s.img));
+			// putImageData doesn't blend the alpha correctly, so I need to convert data -> images
+			s.img = [IMG(DataURL(s.img[0])), IMG(DataURL(s.img[1]))];
+			
+			// Animation vars
+			s.state = 0;
+			s.time = T();
 		}
 	},
 	
@@ -297,10 +356,12 @@ IMGFX = {
 		
 		if(clear == true) IMGFX.ClearHistory(true);
 		
-		if(index != "last")
+		if(index != "last") {
 			IMGFX.current = index;
+			PBOX.View3D.update();
+		}
 			
-		ImageArea.update();		
+		ImageArea.update();
 		Update();
 	},
 	
@@ -324,6 +385,8 @@ IMGFX = {
 		IMGFX.history.push({name: func, img: CloneImg(IMGFX.target)});
 		IMGFX.current = IMGFX.history.length-1;
 		Update();
+		
+		PBOX.View3D.update();
 	},
 	
 	ClearHistory: function(savefirst) {
@@ -709,9 +772,6 @@ IMGFX = {
 		
 		ImageArea.update();
 		
-		// Remove selection
-		if(sel) delete IMGFX.selection;
-		
 		Update();
 		IMGFX.AddHistory("Crop");
 		
@@ -946,7 +1006,7 @@ IMGFX = {
 		for(; j < dl; j++) {			
 			i = j*4;
 			
-			t = (Math.random()*m)-a;
+			t = (RND()*m)-a;
 			d[i] = d2[i]+t;
 			d[i+1] = d2[i+1]+t;
 			d[i+2] = d2[i+2]+t;
@@ -1045,6 +1105,37 @@ IMGFX = {
 		return T()-t1;
 	},
 	
+	/* Draw pixel by pixel */
+	ApplyPencil: function(x, y, c, erase) {
+		if(!IMGFX.target) return;
+		
+		var d = IMGFX.td, p = (x+(y*IMGFX.tw))*4;		
+		if(p < 0 || p >= d.length) return;
+		
+		if(erase) {
+			// Load from last non-pencil history state
+			var h = IMGFX.history, i = IMGFX.current;
+			for(; i >= 0; i--) {
+				if(h[i].name != "Pencil") {
+					break;
+				}
+			}
+			
+			var d2 = h[i].img.data;
+			d[p] = d2[p];
+			d[p+1] = d2[p+1];
+			d[p+2] = d2[p+2];
+			d[p+3] = d2[p+3];
+		} else {		
+			d[p] = c[0];
+			d[p+1] = c[1];
+			d[p+2] = c[2];
+			d[p+3] = c[3];
+		}
+		
+		ImageArea.update();		
+	},
+	
 	/* Apply a brush to the image */
 	ApplyBrush: function(x, y, c, brush, erase) {
 		if(!IMGFX.target) return;
@@ -1081,10 +1172,8 @@ IMGFX = {
 			else
 				p += 4;
 			
-		}
-		
-		ImageArea.update();
-		
+		}		
+		ImageArea.update();		
 	},
 	
 	/* Compute the averages for image comparison
@@ -1232,10 +1321,10 @@ IMGFX = {
 		while(j < dl) {				
 			i = j*4;
 			
-			d[i] = FLOOR(Math.random()*255);
-			d[i+1] = ROUND(Math.random()*255);
-			d[i+2] = CEIL(Math.random()*255);
-			d[i+3] = CEIL((Math.random()*128)+127);
+			d[i] = FLOOR(RND()*255);
+			d[i+1] = ROUND(RND()*255);
+			d[i+2] = CEIL(RND()*255);
+			d[i+3] = CEIL((RND()*128)+127);
 			j++;
 		}
 		
@@ -1393,10 +1482,6 @@ IMGFX = {
 		
 		ImageArea.update();
 		
-		if(IMGFX.selection) {
-			delete IMGFX.selection;
-		}
-		
 		//CL("Resize("+new_w+", "+new_h+"): "+(T() - t1));
 		
 		return T()-t1;
@@ -1552,7 +1637,7 @@ IMGFX = {
 				s = e-pw;
 			}
 			
-			t = FLOOR((Math.random()*amt)-halfamt)*4;
+			t = FLOOR((RND()*amt)-halfamt)*4;
 			
 			if(i+t >= e) t -= pw;
 			else if(i+t < s) t += pw;
@@ -1590,7 +1675,7 @@ IMGFX = {
 			
 			low_g = Clamp(255-((255/w[1])-(j/w[1])), 0, up_g);
 			
-			ra[i+1] = ROUND(Math.random()*(up_g-low_g))+low_g;
+			ra[i+1] = ROUND(RND()*(up_g-low_g))+low_g;
 			ra[i] = Clamp(ROUND(up_g-((ra[i+1]-low_g)*(w[1]/w[0]))), 0, up_r);
 			
 			ra[i+2] = Clamp(ROUND(up_g-((ra[i+1]-low_g)*(w[1]/w[2]))), 0, up_b);
@@ -1606,9 +1691,9 @@ IMGFX = {
 			
 			
 			// Blue has the most leeway
-			/*ra[i+2] = ROUND(Math.random()*255);
+			/*ra[i+2] = ROUND(RND()*255);
 			
-			ra[i] = ROUND(Math.random()*255);
+			ra[i] = ROUND(RND()*255);
 			
 			ra[i+1] = ROUND(1.474926254*j - 0.387463127*ra[i] - 0.087463127*ra[i+2]);
 			
@@ -1625,8 +1710,8 @@ IMGFX = {
 			
 			t = ROUND((d2[i]*w[0])+(d2[i+1]*w[1])+(d2[i+2]*w[2]))*3;
 			
-			/*r = Math.random()*255;
-			b = Math.random()*255;
+			/*r = RND()*255;
+			b = RND()*255;
 			g = 1.474926254*t - 0.387463127*r - 0.087463127*b*/
 			
 			

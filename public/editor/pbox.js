@@ -30,7 +30,7 @@ PBOX_Base = Class.extend({
 		
 		this.x = this.y = 0;
 		this.w = w, this.h = h;
-		this.title = title;		// Title displayed on bar
+		this.title = title;	// Title displayed on bar
 		this.noImage = noImage;	// if window can be opened when no image is loaded
 		this.active = false;	// if window is opened/closed
 		this.closing = false;	// Used for fading
@@ -66,7 +66,7 @@ PBOX_Base = Class.extend({
 	},
 	
 	// Window opened
-	open: function() {		
+	open: function() {
 		if(!this.noImage && !ImageArea.open) return;
 		
 		if(!this.active) {
@@ -104,7 +104,7 @@ PBOX_Base = Class.extend({
 		
 		for(var i = 0; i < arguments.length; i++) {
 			this.children.push(arguments[i]);
-		}		
+		}
 	},
 	
 	// Draw window
@@ -158,7 +158,7 @@ PBOX_New = PBOX_Base.extend({
 	draw: function(ctx) {
 		ctx.save();
 		
-		for(var i = 0; i < this.txt.length; i++) {			
+		for(var i = 0; i < this.txt.length; i++) {
 			this.lbl[i].set(this.x+15, this.y+15+(i*30));
 			this.txt[i].set(this.x+100, this.y+15+(i*30));
 		}
@@ -235,7 +235,7 @@ PBOX_Resize = PBOX_Base.extend({
 		
 		// Preview and pixel/percentage
 		for(; i < this.cb.length; i++) {
-			if(this.cb[i].detect(x, y, type) && type == "click") {
+			if(this.cb[i].detect(x, y, type) && type == "up") {
 				
 				// Change pixels to percentage and vice versa
 				if(i == 1) {
@@ -259,7 +259,7 @@ PBOX_Resize = PBOX_Base.extend({
 		}
 		
 		// Link button
-		if(type == "click" && this.link.detect(x, y, type)) {
+		if(type == "up" && this.link.detect(x, y, type)) {
 			if(this.linked) this.link.img = this.img_unlink;
 			else this.link.img = this.img_link;
 			this.linked = !this.linked;
@@ -276,7 +276,7 @@ PBOX_Resize = PBOX_Base.extend({
 			this.lbl[i].set(this.x+15, this.y+15+(i*30));
 			this.txt[i].set(this.x+100, this.y+15+(i*30));
 			this.cb[i].set(this.x+15, this.y+80+(i*25));
-		}		
+		}
 		
 		this.link.set(this.x+210, this.y+26);
 		
@@ -329,7 +329,7 @@ PBOX_ColorBox = PBOX_Base.extend({
 		this.callback = cb;
 		
 		// Don't draw the call object!
-		this.doNotDraw = [this.callobj];		
+		this.doNotDraw = [this.callobj];
 	},
 	recalc: function(noBarUpdate, noTextUpdate) {
 		
@@ -400,7 +400,7 @@ PBOX_ColorBox = PBOX_Base.extend({
 		}
 		
 		// Color pick
-		if(type == "click") {
+		if(type == "up") {
 			
 			if(this.cpick.detect(x, y, type)) {
 				SC("crosshair");
@@ -422,7 +422,7 @@ PBOX_ColorBox = PBOX_Base.extend({
 		// Only recalc and update text if something changed
 		if(changed) this.recalc(true);
 		
-		this._super(x, y, type);		
+		this._super(x, y, type);
 	},
 	draw: function(ctx) {
 		ctx.save();
@@ -463,16 +463,16 @@ PBOX_FontBox = PBOX_Base.extend({
 	},
 	def: function() {
 	},
-	detect: function(x, y, type) {		
+	detect: function(x, y, type) {
 		
 		this._super(x, y, type);
 		
-		if(type != "click") return;
+		if(type != "up") return;
 		
 		// Text boxes
 		for(var i = 0; i < this.txt.length; i++) {
 			this.txt[i].detect(x, y, type);
-		}		
+		}
 	},
 	draw: function(ctx) {
 		ctx.save();
@@ -511,7 +511,7 @@ PBOX_Grayscale = PBOX_Base.extend({
 	detect: function(x, y, type) {
 		
 		// Radio buttons
-		if(type == "click") {			
+		if(type == "up") {
 			for(var i = 0; i < this.rb.length; i++) {
 				if(this.rb[i].detect(x, y, type)) {
 					this.rb_val = i;
@@ -523,7 +523,7 @@ PBOX_Grayscale = PBOX_Base.extend({
 			this.rb[this.rb_val].toggle(true);
 		}
 		
-		this._super(x, y, type);		
+		this._super(x, y, type);
 	},
 	draw: function(ctx) {
 		ctx.save();
@@ -558,7 +558,7 @@ PBOX_Mirror = PBOX_Base.extend({
 	},
 	detect: function(x, y, type) {
 		
-		if(type == "click") {		
+		if(type == "up") {
 			this.hr.detect(x, y, type);
 			this.vr.detect(x, y, type);
 			IMGFX.Mirror(this.vr.active, this.hr.active);
@@ -602,7 +602,7 @@ PBOX_InvertColors = PBOX_Base.extend({
 	},
 	detect: function(x, y, type) {
 		
-		if(type == "click") {
+		if(type == "up") {
 			
 			var changed = false;
 			
@@ -611,7 +611,7 @@ PBOX_InvertColors = PBOX_Base.extend({
 				changed = (changed || this.cb[e].detect(x, y, type));
 			}
 			
-			if(changed) IMGFX.InvertColors(this.cb[0].active, this.cb[1].active, this.cb[2].active);			
+			if(changed) IMGFX.InvertColors(this.cb[0].active, this.cb[1].active, this.cb[2].active);
 		}
 		
 		this._super(x, y, type);
@@ -652,7 +652,7 @@ PBOX_Brightness = PBOX_Base.extend({
 	detect: function(x, y, type) {
 		
 		// Radio buttons
-		if(type == "click") {
+		if(type == "up") {
 			for(var i = 0; i < this.rb.length; i++) {
 				this.rb[i].toggle(false);
 				if(this.rb[i].detect(x, y, type)) {
@@ -765,7 +765,7 @@ PBOX_BoxBlur = PBOX_Base.extend({
 		
 		ctx.font = "22px "+F1;
 		ctx.fillStyle = C1;
-		ctx.fillText(Math.round(this.s.value*20), this.s.x+this.s.w+10, this.s.y+20, this.s.w);		
+		ctx.fillText(Math.round(this.s.value*20), this.s.x+this.s.w+10, this.s.y+20, this.s.w);
 	
 		ctx.restore();
 	}
@@ -799,7 +799,7 @@ PBOX_Shift = PBOX_Base.extend({
 	draw: function(ctx) {
 		ctx.save();
 	
-		this.sw.set(this.x+20, this.y+10);		
+		this.sw.set(this.x+20, this.y+10);
 		this.sh.set(this.x+20, this.y+40);
 		
 		// Drawing begins here
@@ -808,7 +808,7 @@ PBOX_Shift = PBOX_Base.extend({
 		ctx.font = "22px "+F1;
 		ctx.fillStyle = C1;
 		ctx.fillText(Math.round(this.sw.value*ImageArea.w), this.sw.x+this.sw.w+10, this.sw.y+20, this.sw.w);
-		ctx.fillText(Math.round(this.sh.value*ImageArea.h), this.sh.x+this.sh.w+10, this.sh.y+20, this.sh.w);		
+		ctx.fillText(Math.round(this.sh.value*ImageArea.h), this.sh.x+this.sh.w+10, this.sh.y+20, this.sh.w);
 	
 		ctx.restore();
 	}
@@ -832,19 +832,19 @@ PBOX_ChangeHSL = PBOX_Base.extend({
 	apply: function() {
 		IMGFX.AddHistory("Change HSL");
 	},
-	detect: function(x, y, type) {		
+	detect: function(x, y, type) {
 		// Slider
 		if(this.sh.detect(x, y, type) || this.ss.detect(x, y, type) || this.sl.detect(x, y, type)) {
 			IMGFX.ChangeHSL(this.sh.value-0.5, (this.ss.value-0.5)*2, (this.sl.value-0.5)*2);
 		}
 		
-		this._super(x, y, type);		
+		this._super(x, y, type);
 	},
 	draw: function(ctx) {
 		ctx.save();
 		
-		this.sh.set(this.x+20, this.y+10);		
-		this.ss.set(this.x+20, this.y+40);		
+		this.sh.set(this.x+20, this.y+10);
+		this.ss.set(this.x+20, this.y+40);
 		this.sl.set(this.x+20, this.y+70);
 		
 		// Drawing begins here
@@ -927,8 +927,8 @@ PBOX_View3D = PBOX_Base.extend({
 		this._super("Three.js 3D Texture Preview", 420, 470);
 		
 		// Moving the model with the mouse
-		this.down = false;		// Mouse down
-		this.held = [0, 0];		// Position where clicked
+		this.down = false;	// Mouse down
+		this.held = [0, 0];	// Position where clicked
 		this.meshrot = [0, 0];	// Mesh rotation before clicking down
 		
 		// No default buttons
@@ -945,23 +945,34 @@ PBOX_View3D = PBOX_Base.extend({
 		this.camera.position.z = 330;
 
 		var r = this.renderer = new THREE.WebGLRenderer(canvas), rd = r.domElement;
-		r.setSize(0, 0);		
+		r.setSize(0, 0);
 		rd.className = "gl";
-		document.getElementById("transparency").appendChild(rd);		
+		document.getElementById("transparency").appendChild(rd);
 		D(rd, false);
 	},
-	def: function() {
-		
-		// I can't (as far as I know) send raw image data directly to a texture
-		// So I have to convert it to a data url first		
+	def: function() {		
 		var r = this.renderer, rd = r.domElement;
 			
-		// Then load the texture that way
+		// Update mesh and materials
+		this.update();
+		
+		// Set up/expand renderer
+		r.setSize(400, 400);
+		r.setClearColor(BG2);
+		rd.style.left = (this.x+20)+"px";
+		rd.style.top = (this.y+20)+"px";
+		D(rd, true);
+	},
+	update: function() {
+		if(!this.active) return;
+		
+		// I can't (as far as I know) send raw image data directly to a texture
+		// So I have to convert it to a data url first
 		var texture = new THREE.ImageUtils.loadTexture(DataURL(IMGFX.target));
 		
 		// Create mesh if it doesn't exist, otherwise just update the map
 		if(!this.mesh) {
-			this.material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+			this.material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true });
 			this.mesh = new THREE.Mesh(new THREE.SphereGeometry(200, 16, 12), this.material);
 			this.mesh.rotation.y = -1.5;	// Face toward camera
 			this.scene.add(this.mesh);
@@ -970,15 +981,11 @@ PBOX_View3D = PBOX_Base.extend({
 		}
 		this.material.needsUpdate = true;
 		
-		// Set up/expand renderer
-		r.setSize(400, 400);
-		r.setClearColor(BG2);
-		rd.style.left = (this.x+20)+"px";
-		rd.style.top = (this.y+20)+"px";
-		D(rd, true);
-		
 		// The texture doesn't get updated automatically unless I wait a bit
-		setTimeout(Update, 20);
+		var t = this;
+		setTimeout(function() {
+			t.renderer.render(t.scene, t.camera);
+		}, 100);
 	},
 	close: function(applied) {
 		D(this.renderer.domElement, false);
@@ -1090,9 +1097,9 @@ PBOX_ChooseTheme = PBOX_Base.extend({
 	cancel: function() {
 		SetTheme(this.last);
 	},
-	detect: function(x, y, type) {		
+	detect: function(x, y, type) {
 		
-		if(type == "click") {		
+		if(type == "up") {
 			// Radio buttons
 			for(var i = 0; i < this.rb.length; i++) {
 				if(this.rb[i].detect(x, y, type)) {
@@ -1114,7 +1121,7 @@ PBOX_ChooseTheme = PBOX_Base.extend({
 		var off = i = 0;
 		
 		for(; i < this.rb.length; i++) {
-			if(i > 0 && i % 9 == 0) off += 100;		
+			if(i > 0 && i % 9 == 0) off += 100;
 			this.rb[i].set(this.x+off+10, this.y+((i%9)*25)+15);
 		}
 		
@@ -1129,12 +1136,12 @@ PBOX_ChooseTheme = PBOX_Base.extend({
 PBOX_ImageBrowser = PBOX_Base.extend({
 	init: function() {
 		this._super("Images", 870, 530, true);
-		this.b_cancel = this.b_apply = null;		
+		this.b_cancel = this.b_apply = null;
 		this.b_next = new Button("Next");
 		this.b_prev = new Button("Previous");
 		this.rb = [new RadioButton("Difference", 1), new RadioButton("Size", 2), new RadioButton("", 3)];
 		
-		this.setChildren(this.b_next, this.b_prev, this.rb);		
+		this.setChildren(this.b_next, this.b_prev, this.rb);
 	},
 	images: [],	// Images array
 	hover: -1,	// Hovered image
@@ -1171,7 +1178,7 @@ PBOX_ImageBrowser = PBOX_Base.extend({
 							this.hover = i;
 							Update();
 						}
-					} else if(type == "click") {
+					} else if(type == "up") {
 						CL("OPEN "+i);
 					}
 				}
@@ -1196,7 +1203,7 @@ PBOX_ImageBrowser = PBOX_Base.extend({
 		var bn = this.b_next, bp = this.b_prev;
 		
 		bn.active = this.page < this.pages-1;
-		bp.active = this.page > 0;	
+		bp.active = this.page > 0;
 		bn.set(this.x+this.w-bn.w-10, this.y+this.h-bn.h-10);
 		bp.set(bn.x-bp.w-10, bn.y);
 		
@@ -1233,8 +1240,8 @@ PBOX_ImageBrowser = PBOX_Base.extend({
 				l = ctx.measureText(img.t.toUpperCase()).width;
 				ctx.fillText(img.t.toUpperCase(), x+190-l, y+190, 100);
 				ctx.fillText(img.s >= 1000 ? (img.s >= 1000000 ? Math.round((img.s/1000000)*10)/10 + " MB" : Math.round((img.s/1000)*10)/10 + " KB") : img.s+" bytes", x+10, y+190, 190);
-			}			
-			ctx.fillStyle = BG7, ctx.lineWidth = 2, ctx.strokeRect(x, y, 200, 200);			
+			}
+			ctx.fillStyle = BG7, ctx.lineWidth = 2, ctx.strokeRect(x, y, 200, 200);
 		}
 		
 		// # of matches found + # of pages
@@ -1311,7 +1318,7 @@ PBOX_Hotkeys = PBOX_Base.extend({
 		
 		// Detect hotkey input
 		for(var i = 0; i < this.btn.length; i++) {
-			if(this.btn[i].detect(x, y, type) && type == "click" && this.input == null) {
+			if(this.btn[i].detect(x, y, type) && type == "up" && this.input == null) {
 				this.input = i;
 				this.btn[i].setText("Enter hotkey");
 				this.btn[i].toggle(false);
@@ -1326,7 +1333,7 @@ PBOX_Hotkeys = PBOX_Base.extend({
 		}
 		
 		// Restore default hotkeys
-		if(this.b_def.detect(x, y, type) && type == "click") {
+		if(this.b_def.detect(x, y, type) && type == "up") {
 			DefaultHotkeys();
 			this.sync();
 		}
@@ -1385,8 +1392,8 @@ PBOX_About = PBOX_Base.extend({
 		// Text
 		this.name = "Photoblob";
 		this.desc = "Image/Texture Editor and 3D Model Viewer";
-		this.version = "0.1.7";
-		this.update = "Updated 02/19/2015";		
+		this.version = "0.1.8";
+		this.update = "Updated 02/26/2015";
 		this.site = "http://photo.blob.software/";
 		this.copy = "© 2015 Vincent Costanza";
 		
@@ -1489,7 +1496,9 @@ PBOX = {
 			t = this[i];
 			if(typeof(t) == "object" && t.draw != undefined && t.active == true && t.closing == false) {
 			
-				opened = true;
+				// Exceptions to PBOX opened rule				
+				// Otherwise ignore all non-PBOX detects when opened
+				if(i != "View3D") opened = true;
 					
 				// Detect mouse on title bar
 				if(x-t.x >= 0 && x-t.x < t.w && t.y-y >= 0 && t.y-y <= 30) {
@@ -1504,13 +1513,9 @@ PBOX = {
 					// X button
 					if(((t.x+t.w)-x) >= 0 && ((t.x+t.w)-x) <= 30) {
 						SC("pointer");
-						if(type == "click") t.close();
-					}
-					
+						if(type == "up") t.close();
+					}					
 				}
-				
-				// Detect within window
-				t.detect(x, y, type);
 				
 				// Currently dragging window
 				if(t.isDragging) {
@@ -1525,8 +1530,15 @@ PBOX = {
 					} else if(type == "up") {
 						t.isDragging = false;
 						Update();
-					}					
-				}									
+					}
+				} else {				
+					// Detect within window
+					t.detect(x, y, type);
+					
+					if(i == "View3D" && WB(x, y, t)) {
+						opened = true;
+					}
+				}
 			}
 		}
 		return opened;
@@ -1584,8 +1596,8 @@ PBOX = {
 				
 				ctx.restore();
 				
-				ctx.globalAlpha = 1;		
+				ctx.globalAlpha = 1;
 			}
-		}	
+		}
 	}
 };

@@ -27,18 +27,23 @@ CurrentTheme = 0;
 /* Drawing update vars */
 MouseX = 0;
 MouseY = 0;
-CTRL = false;
 LastUpdate = 0;
 Frame = 0;
 Icons = [];
 FocusObj = undefined;
 ZOOM = 1;
 
+/* Basic input */
+CTRL = SHIFT = ALT = MDOWN = LCLICK = RCLICK = false;
+
 // Fullscreen state
 InFullscreen = false;
 
 // Used for assigning hotkeys
 LockKeyboard = false;
+
+// Activate Three.JS console messages
+THREE_MSG = false;
 
 // Node server IP
 // Should be left blank if node server is hosted on same server as this site
@@ -48,7 +53,7 @@ NODE_SERVER = "";
 LOCAL = (window.location.host == "" || window.location.host == "localhost");
 
 // Math function aliases
-ABS = Math.abs, MAX = Math.max, MIN = Math.min, CEIL = Math.ceil, FLOOR = Math.floor, ROUND = Math.round, POW = Math.pow, SQRT = Math.sqrt;
+ABS = Math.abs, MAX = Math.max, MIN = Math.min, CEIL = Math.ceil, FLOOR = Math.floor, ROUND = Math.round, RND = Math.random, POW = Math.pow, SQRT = Math.sqrt;
 
 /* Array copy I would make this an Array.prototype function but that usually breaks everything, so let's play it safe */
 function ARCPY(arr) {
@@ -66,12 +71,20 @@ function CL() {
 		var a = new Array(arguments.length), i = 0;
 		for(; i < arguments.length; i++) {
 			a[i] = arguments[i];
+			if(!THREE_MSG && a[i].indexOf && a[i].indexOf("THREE.") == 0) return;
 		}
 		console.log(a);
 	} else {
 		console.log(arguments[0]);
 	}	
 }
+
+/* Console shims */
+function WARN(str) {
+	if(!THREE_MSG && str.indexOf("THREE.") == 0) return;
+	console.warn(str);
+}
+function ERR(str) { console.error(str); }
 
 /* Get canvas 2D context */
 function GC(c) { return c.getContext("2d"); }
@@ -220,7 +233,7 @@ function ReadFiles(e) {
 	// Read form data
 	for(; i < f.length; i++) {
 		if(f[i].type.match(/image.*/)) {
-			form.append('uploads', f[i], f[i].name);
+			//form.append('uploads', f[i], f[i].name);
 			reader.fileName = f[i].name;
 			reader.readAsDataURL(f[i]);
 		}
@@ -307,8 +320,9 @@ function StartEditor() {
 				e.stopPropagation();
 			}
 			
-			d.addEventListener("drop", ReadFiles);		
+			d.addEventListener("drop", ReadFiles);
 			canvas.addEventListener("click", MouseDetect);
+			canvas.addEventListener("contextmenu", MouseDetect);	// Right-click
 			canvas.addEventListener("mousemove", MouseDetect);
 			canvas.addEventListener("mousedown", MouseDetect);
 			canvas.addEventListener("mouseup", MouseDetect);
@@ -316,6 +330,11 @@ function StartEditor() {
 			canvas.addEventListener("DOMMouseScroll", MouseDetect);
 			
 			addEventListener("keydown", Hotkeys);
+			addEventListener("keyup", function(e) {
+				CTRL = e.ctrlKey;
+				SHIFT = e.shiftKey;
+				ALT = e.altKey;
+			});
 			
 			InitMenus();
 			
@@ -343,7 +362,18 @@ function Update() {
 /* Detect mouse events */
 function MouseDetect(event) {
 	
-	var t = event.target, type = event.type.indexOf("Scroll") > -1 ? "wheel" : event.type.replace("mouse", "");
+	var t = event.target, type = (event.type.indexOf("Scroll") > -1 ? "wheel" : (event.type == "contextmenu" ? "rclick" : event.type.replace("mouse", "")));
+	
+	// Stop click events here, passing them to the detections is redudant
+	if(type == "rclick") {
+		event.preventDefault();
+		event.stopPropagation();
+		RCLICK = true;
+		return;
+	} else if(type == "click") {
+		LCLICK = true;
+		return;
+	}
 	
 	// This is the best cross-browser way of getting accurate canvas click coords
 	var x = FLOOR(event.clientX-t.getBoundingClientRect().left);
@@ -355,8 +385,12 @@ function MouseDetect(event) {
 	// Clear cursor - I should never need to call this anywhere else
 	SC();
 	
+	// Mouse down toggle
+	if(type == "down") MDOWN = true;
+	else if(type == "up") MDOWN = RCLICK = LCLICK = false;
+	
 	// Unfocus from text box
-	if(type == "down" && FocusObj) {
+	if(MDOWN && FocusObj) {
 		FocusObj.unfocus();
 		
 	// Cross-platform mouse wheel event
@@ -374,6 +408,8 @@ function MouseDetect(event) {
 		return;
 	}
 	
+	// Detect for all layers
+	// Passed values are: "down", "up", "wheeldown", and "wheelup"
 	if(!PBOX.detect(x, y, type)) {
 		if(!MenuBar.detect(x, y, type)) {
 			ToolBox.detect(x, y, type);
@@ -381,12 +417,12 @@ function MouseDetect(event) {
 			EditArea.detect(x, y, type);
 			UVMap.detect(x, y, type);
 		}
-	}
+	}	
 }
 
 /* Detect keyboard events */
 function Hotkeys(event) {
-	var ct = CTRL = event.ctrlKey, k = event.key ? event.key.toLowerCase() : String.fromCharCode(event.charCode+(ct?96:0)).toLowerCase(), sh = event.shiftKey, alt = event.altKey, hk = false;
+	var ct = CTRL = event.ctrlKey, k = event.key ? event.key.toLowerCase() : String.fromCharCode(event.charCode+(ct?96:0)).toLowerCase(), sh = SHIFT = event.shiftKey, alt = ALT = event.altKey, hk = false;
 	
 	// Non-alphanumeric keys (legacy only)
 	if(event.key == null && event.charCode == 0) {
@@ -1013,9 +1049,9 @@ function InitMenus() {
 				break;
 			case "Select":
 				MenuBar.items[m].setMenu(new Menu([
-					new MenuItem("All"),
-					new MenuItem("None"),
-					new MenuItem("Invert")
+					new MenuItem("All", HK_SelectAll),
+					new MenuItem("None", HK_SelectNone),
+					new MenuItem("Invert", HK_InvertSelect)
 				]));
 				break;
 			case "Filter":
@@ -1033,8 +1069,9 @@ function InitMenus() {
 			case "View":
 				MenuBar.items[m].setMenu(new Menu([
 					new MenuItem("3D View", PBOX.View3D, "open"),
-					new MenuItem("Zoom In"),
-					new MenuItem("Zoom Out"),
+					new MenuItem("Zoom In", HK_ZoomIn),
+					new MenuItem("Zoom Out", HK_ZoomOut),
+					new MenuItem("Reset Zoom", HK_ResetZoom),
 					new MenuItem("Fullscreen", TFS)
 				]));
 				break;
@@ -1150,7 +1187,7 @@ function SetTheme(num) {
 	ctx.fillStyle = BG2;
 	ctx.fillRect(20, 0, 40, 20);
 	ctx.fillRect(0, 20, 20, 40);
-	var img = "url("+can.toDataURL('image/png', 1.0)+")";
+	var img = "url("+can.toDataURL()+")";
 	document.body.style.backgroundImage = img;
 	document.body.style.backgroundColor = BG1;
 	
