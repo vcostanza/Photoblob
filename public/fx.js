@@ -26,9 +26,13 @@ IMGFX = {
 	tw: 0,
 	th: 0,
 	
-	selection: null,
+	// History variables
 	history: new Array(),
 	current: 0,
+	
+	// Misc
+	selection: null,
+	speedTesting: false,
 	
 	/* Set image target */
 	SetTarget: function(img) {
@@ -37,6 +41,22 @@ IMGFX = {
 		this.tw = img.width;
 		this.th = img.height;
 		this.SEL_Clear();
+	},
+	
+	/* Return the target's image data */
+	GetTarget: function() {		
+		if(!IMGFX.target) return null;
+		
+		var w = IMGFX.tw, fw = w, h = IMGFX.th, fh = h, s = IMGFX.selection, o = 0, m = null;
+		
+		if(s) {			
+			o = s.x+(s.y*w);
+			w = s.w;
+			h = s.h;
+			m = s.mask;
+		}
+		
+		return {w: w, h: h, fw: fw, fh: fh, o: o, m: m};
 	},
 	
 	/*
@@ -65,7 +85,7 @@ IMGFX = {
 	SEL_Invert: function() {
 		if(this.selection) {
 			
-			var sel = this.selection, sm = sel.mask, w = IMGFX.tw, h = IMGFX.th, sx = Clamp(sel.x, 0, w), sy = Clamp(sel.y, 0, h), sw = Clamp(sx+sel.w, 0, w)-sx, sh = Clamp(sy+sel.h, 0, h)-sy, i = 0;
+			var sel = this.selection, sm = sel.mask, w = IMGFX.tw, h = IMGFX.th, sx = Clamp(sel.x, 0, w), sy = Clamp(sel.y, 0, h), sw = Clamp(sx+sel.w-1, 0, w)-sx, sh = Clamp(sy+sel.h-1, 0, h)-sy, i = 0;
 			
 			// Error checking
 			if(sw == sx || sh == sy) {
@@ -127,6 +147,8 @@ IMGFX = {
 	** TODO: Figure out how to fix the "star" problem */
 	SEL_SetPoly: function(p) {
 		
+		//CL(p.toString());
+		
 		// First get bounds of polygon
 		var x = IMGFX.tw, y = x, w = 0, h = 0, i = 0, j = 0;
 		for(; i < p.length; i+=2) {
@@ -137,20 +159,22 @@ IMGFX = {
 			if(p[i+1] < y) y = p[i+1];
 			else if(p[i+1] > h) h = p[i+1];
 		}
-		w -= x-1;
-		h -= y-1;
+		
+		w -= x;
+		h -= y;
 		
 		var s = new Selection(x, y, w, h);
 		
 		// Create selection
 		if(IMGFX.SEL_Init(s)) {
+			
 			var sl = s.w*s.h, sm = s.mask = new Uint8ClampedArray(sl), bounds = new Array(), buf = null, inside = false, k = 0;
 			
 			// Define selection bounds based on line rasterization
 			for(i = 0; i < p.length-2; i+=2) {
-				buf = IMGFX.PIX_RasterLine(p[i], p[i+1], p[i+2], p[i+3]);
-				for(j = 0; j < buf.length; j++) {
-					k = (buf[j][0]-x)+((buf[j][1]-y)*s.w);
+				buf = Lerp2D(p[i], p[i+1], p[i+2], p[i+3]);
+				for(j = 0; j < buf.length; j += 2) {
+					k = Clamp(buf[j]-x, 0, w-1)+(Clamp(buf[j+1]-y, 0, h-1)*s.w);
 					if(k < sl) {
 						sm[k] = 128;
 						bounds.push(k);
@@ -161,21 +185,63 @@ IMGFX = {
 			// Sort bounds ascending value
 			bounds.sort(function(a, b){return a-b;});
 			
-			// Fill polygon bounds
+			// Add fill
 			for(i = 0; i < bounds.length-1; i++) {
 				
 				// Skip if next pixel is next line
-				if(!(bounds[i] >= s.w && bounds[i] < sl-s.w && bounds[i+1]-bounds[i] > 1 && FLOOR(bounds[i]/s.w) == FLOOR(bounds[i+1]/s.w))) {
-					inside = false;
+				if(!(bounds[i] >= s.w && bounds[i] < sl-s.w && FLOOR(bounds[i]/s.w) == FLOOR(bounds[i+1]/s.w))) {
+					//inside = false;
 					continue;
 				}
 				
-				inside = !inside;
+				if(bounds[i+1]-bounds[i] < 2) continue;
 				
-				if(inside) {
-					for(j = bounds[i]+1; j < bounds[i+1]; j++) {
-						sm[j] = 255;
+				//inside = !inside;
+				
+				for(j = bounds[i]+1; j < bounds[i+1]; j++) {
+					if(sm[j-s.w] > 0 && sm[j-1] != 0) sm[j] = 255;
+				}
+			}
+			
+			// Remove unwanted areas
+			var remove = false;
+			for(i = bounds.length-1; i > 0; i--) {
+				
+				// Skip if next pixel is next line
+				if(!(bounds[i] >= s.w && bounds[i] < sl-s.w && FLOOR(bounds[i]/s.w) == FLOOR(bounds[i-1]/s.w) && bounds[i]-bounds[i-1] >= 2)) {
+					continue;
+				}
+				
+				remove = restart = false;
+				
+				// Scan each bound
+				for(j = bounds[i]-1; j > bounds[i-1]; j--) {
+					
+					// Found collision	
+					if(!remove && (sm[j+s.w] == 0 || sm[j+1] == 0 || sm[j] == 255 && (sm[j-1] == 0 || sm[j-s.w] == 0))) {
+						remove = true;
+						j = bounds[i]-1;
 					}
+					
+					// Clear selection pixel
+					if(remove) sm[j] = 0;
+					
+					// Did we forget a collision?
+					// This usually happens with spiral selections
+					if(sm[j] == 0 && sm[j+s.w] == 255) {
+						
+						// Find bounds of pixel below
+						for(k = 0; k < bounds.length-1; k++) {
+							
+							// Go back to the bound and scan again
+							if(j+s.w > bounds[k] && j+s.w < bounds[k+1]) {
+								i = k+2;
+								j = bounds[i]-1;
+								remove = false;
+								break;
+							}
+						}
+					}					
 				}
 			}
 			
@@ -195,35 +261,42 @@ IMGFX = {
 			s.img = [ImageData(s.w, s.h), ImageData(s.w, s.h)];
 			
 			// Only draw pixels where the border is
-			var sm = s.mask, d1 = s.img[0].data, d2 = s.img[1].data, inside = false, dl = s.w*s.h, i = 0, j = 0;
-			for(; j < dl; j++) {
-				i = j*4;
-				
-				// Reset state when new line
-				if(j % s.w == 0) inside = false;
+			var sm = s.mask, d1 = s.img[0].data, d2 = s.img[1].data, inside = false, dl = s.w*s.h*4, i = 0, j = 0, px = 0,
+			
+			// Set pixel to random shade between black and white
+			randPix = function(p) {
+				d1[p] = d1[p+1] = d1[p+2] = FLOOR(RND()*255);
+				d2[p] = d2[p+1] = d2[p+2] = 255-d1[p];
+				d1[p+3] = d2[p+3] = 255;
+			};
+			
+			for(; i < dl; i += 4) {
 				
 				if(inside) {					
 					// Upcoming empty area or new line
-					if(sm[j+1] == 0 || (j+1) % s.w == 0) {
-						d1[i] = d1[i+1] = d1[i+2] = FLOOR(RND()*255);
-						d2[i] = d2[i+1] = d2[i+2] = 255-d1[i];
-						d1[i+3] = d2[i+3] = 255;
+					if(sm[j+1] == 0 || px+1 == s.w) {
+						randPix(i);
 						inside = false;
 					// Top or bottom is empty
 					} else if(!(sm[j+s.w] && sm[j-s.w])) {
-						d1[i] = d1[i+1] = d1[i+2] = FLOOR(RND()*255);
-						d2[i] = d2[i+1] = d2[i+2] = 255-d1[i];
-						d1[i+3] = d2[i+3] = 255;
+						randPix(i);
 					}
 				} else {
 					// Inside selection
 					if(sm[j] > 0) {
-						d1[i] = d1[i+1] = d1[i+2] = FLOOR(RND()*255);
-						d2[i] = d2[i+1] = d2[i+2] = 255-d1[i];
-						d1[i+3] = d2[i+3] = 255;
+						randPix(i);
 						inside = true;
 					}
 				}
+				
+				px++;
+				j++;
+				// Reset state when new line
+				if(px == s.w) {
+					px = 0;
+					inside = false;
+				}
+				
 			}
 			
 			// putImageData doesn't blend the alpha correctly, so I need to convert data -> images
@@ -233,83 +306,6 @@ IMGFX = {
 			s.state = 0;
 			s.time = T();
 		}
-	},
-	
-	/* Return the target's image data */
-	GetTarget: function() {		
-		if(!IMGFX.target) return null;
-		
-		var w = IMGFX.tw, fw = w, h = IMGFX.th, fh = h, s = IMGFX.selection, o = 0, m = null;
-		
-		if(s) {			
-			o = s.x+(s.y*w);
-			w = s.w;
-			h = s.h;
-			m = s.mask;
-		}
-		
-		return {w: w, h: h, fw: fw, fh: fh, o: o, m: m};
-	},
-	
-	/* Raster line segment with Bresenham */
-	PIX_RasterLine: function(x1, y1, x2, y2) {
-		
-		if(x1-x2 == 0 && y1-y2 == 0) return [];
-		
-		// Switch variable and original starting points
-		var t = false, sx = x1, sy = y1;
-		
-		// Set center to (0, 0) since it makes life a lot easier
-		x2 -= x1;
-		y2 -= y1;
-		x1 = y1 = 0;
-		
-		// Switch before I do anything
-		if(ABS(x2-x1) < ABS(y2-x1)) {
-			t = y2;
-			y2 = x2;
-			x2 = t;
-			t = true;	// Switch x and y when plotting
-		}
-		
-		// The usual stuff
-		// Added: 'yinc' so I know whether to increment or decrement
-		// Added: 'buf' for the pixel buffer that gets returned
-		var dx = ABS(x2-x1), dy = ABS(y2-x1), yinc = (x2 > x1 ? (y1 > y2 ? -1 : 1) : (y1 > y2 ? 1 : -1)), p = 2*dy-dx, twoDy = 2*dy, twoDyMinusDx = 2*(dy-dx), buf = [], x = 0, y = 0, b = 0;
-
-		// Decide start points
-		if(x1 > x2) {
-			x = x2;
-			y = y2;
-			x2 = x1;
-		} else {
-			x = x1;
-			y = y1;
-		}
-		
-		//CL(t+" | "+x+" | "+y+" | "+dx+" | "+dy+" | "+yinc+" | "+p+" | "+twoDy+" | "+twoDyMinusDx);
-
-		// First point
-		if(t) buf[b] = [y+sx, x+sy]; else buf[b] = [x+sx, y+sy];
-		
-		// Increment
-		while(x < x2) {
-			x++;
-			
-			if(p < 0) {
-				p += twoDy;
-			} else {
-				y += yinc;
-				p += twoDyMinusDx;
-			}
-			
-			// Next point
-			if(t) buf[b] = [y+sx, x+sy]; else buf[b] = [x+sx, y+sy];
-			//CL(buf[b]);
-			b++;
-		}
-		
-		return buf;
 	},
 	
 	/* Default pixel set */
@@ -332,6 +328,14 @@ IMGFX = {
 		d[i] = FLOOR((d[i]*m)+(d2[i]*(1-m)));
 		d[i+1] = FLOOR((d[i+1]*m)+(d2[i+1]*(1-m)));
 		d[i+2] = FLOOR((d[i+2]*m)+(d2[i+2]*(1-m)));
+	},
+	
+	/* Separated for use when necessary */
+	PIX_MixSelectionAlpha: function(i, d, d2, m) {
+		d[i] = FLOOR((d[i]*m)+(d2[i]*(1-m)));
+		d[i+1] = FLOOR((d[i+1]*m)+(d2[i+1]*(1-m)));
+		d[i+2] = FLOOR((d[i+2]*m)+(d2[i+2]*(1-m)));
+		d[i+3] = FLOOR((d[i+3]*m)+(d2[i+3]*(1-m)));
 	},
 	
 	/* Load history at index */
@@ -420,10 +424,12 @@ IMGFX = {
 	 * fw	Full image width
 	 * fh	Full image height
 	 * o	Selection offset
+	 * pw	Pixels per line * 4
 	 * dl	Working array length; Break point
 	 * px	Loop: X offset
 	 * py	Loop: Y offset
-	 * i	Loop: Pixel index
+	 * p	Loop: Pixel index
+	 * i	Loop: Mask index
 	 * t1	Benchmark start time
 	 */
 
@@ -433,20 +439,22 @@ IMGFX = {
 		
 		// Typical variables
 		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, img = IMGFX.GetTarget(),
-			w = img.w, h = img.h, fw = img.fw, fh = img.fh, o = img.o, dl = h*fw, px = 0, py = 0, i = 0, t1 = T();
+			w = img.w, h = img.h, fw = img.fw, fh = img.fh, o = img.o*4, pw = fw*4, dl = w*h, px = 0, py = 0, p = o, i = 0, t1 = T();
 		
-		// Loop until the Y offset exceeds the data length
-		while(py < dl) {
-			
-			// Calculate pixel index
-			i = (o+px+py)*4;
-			
-			// This is where the pixels are actually modified
-			// NOTE: Always write to 'd' and always read from 'd2'
-			d[i] = d2[i];		// Red channel
-			d[i+1] = d2[i+1]	// Green channel
-			d[i+2] = d2[i+2]	// Blue channel
-			d[i+3] = d2[i+3]	// Alpha channel
+		// Loop until there are no more pixels
+		for(; i < dl; i++) {
+		
+			if(!m || m[i] > 0) {
+				// This is where the pixels are actually modified
+				// NOTE: Always write to 'd' and always read from 'd2'
+				d[p] = d2[p];		// Red channel
+				d[p+1] = d2[p+1]	// Green channel
+				d[p+2] = d2[p+2]	// Blue channel
+				d[p+3] = d2[p+3]	// Alpha channel
+				
+				// Apply mask, only if it's less than 255 (max)
+				if(m && m[i] < 255) IMGFX.PIX_MixSelection(p, d, d2, m[i]/255);
+			}
 			
 			// By the way, this example simply syncs the current image with the last saved history data
 			// Most of the time this shouldn't change anything
@@ -454,11 +462,18 @@ IMGFX = {
 			// Increment X offset and reset if I'm on a new line, also increment Y offset
 			// Incrementation should almost always look like this
 			px++;
+			p+=4;
 			if(px == w) {
 				px = 0;
-				py += fw;
+				py += pw;
+				p = py+o;
 			}
 		}
+		
+		// Update the image area so we can see the result
+		// This applies zoom and grab offset to the image
+		ImageArea.update();
+		// Note: FX that are called in a loop (like ApplyBrush) shouldn't call this here (should only be called once per frame)
 		
 		// Optional: Echo the function and time back for debugging purposes
 		// Should be commented out when not being used
@@ -476,74 +491,38 @@ IMGFX = {
 		
 		g |= 0;
 		
-		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, dl = IMGFX.tw*IMGFX.th, j = 0, i = 0, t1 = T();
+		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, img = IMGFX.GetTarget(), w = img.w, h = img.h, fw = img.fw, o = img.o*4, pw = fw*4, dl = w*h,
+			m = img.m, p = o, px = 0, py = 0, i = 0, l = new Float32Array(3), t1 = T();
 		
-		switch(g) {
+		// Luma coefficients
+		if(g > 6) {
+			if(g == 7) l.set([0.299, 0.587, 0.114]);
+			else if(g == 8) l.set([0.2126, 0.7152, 0.0722]);
+			else l.set([0.2627, 0.6780, 0.0593]);
+		}
 		
-			// Average
-			case 0:
-				for(; j < dl; j++) {			
-					i = j*4;
-					d[i] = d[i+1] = d[i+2] = (d2[i]+d2[i+1]+d2[i+2])/3;
-				} break;
-			
-			// Darken
-			case 1:
-				for(; j < dl; j++) {			
-					i = j*4;
-					d[i] = d[i+1] = d[i+2] = MIN(d2[i], d2[i+1], d2[i+2]);
-				} break;
-				
-			// Lighten
-			case 2:
-				for(; j < dl; j++) {			
-					i = j*4;
-					d[i] = d[i+1] = d[i+2] = MAX(d2[i], d2[i+1], d2[i+2]);
-				} break;
-				
-			// Desaturate
-			case 3:
-				for(; j < dl; j++) {			
-					i = j*4;
-					d[i] = d[i+1] = d[i+2] = (MIN(d2[i], d2[i+1], d2[i+2])+MAX(d2[i], d2[i+1], d2[i+2]))/2;
-				} break;
-			
-			// Red-channel
-			case 4:
-				for(; j < dl; j++) {			
-					i = j*4;
-					d[i] = d[i+1] = d[i+2] = d2[i];
-				} break;
-				
-			// Green-channel
-			case 5:
-				for(; j < dl; j++) {			
-					i = j*4;
-					d[i] = d[i+1] = d[i+2] = d2[i+1];
-				} break;
-				
-			// Blue-channel
-			case 6:
-				for(; j < dl; j++) {			
-					i = j*4;
-					d[i] = d[i+1] = d[i+2] = d2[i+2];
-				} break;
-			
-			// Standard luminance coefficients
-			case 7:
-			case 8:
-			case 9:
-				var w = [];
+		for(; i < dl; i++) {
+			if(!m || m[i] > 0) {				
 				switch(g) {
-					case 7: w = [0.299, 0.587, 0.114]; break;
-					case 8: w = [0.2126, 0.7152, 0.0722]; break;
-					case 9: w = [0.2627, 0.6780, 0.0593]; break;
-				}
+					case 0:	d[p] = d[p+1] = d[p+2] = (d2[p]+d2[p+1]+d2[p+2])/3; break;
+					case 1: d[p] = d[p+1] = d[p+2] = MIN(d2[p], d2[p+1], d2[p+2]); break;
+					case 2: d[p] = d[p+1] = d[p+2] = MAX(d2[p], d2[p+1], d2[p+2]); break;
+					case 3: d[p] = d[p+1] = d[p+2] = (MIN(d2[p], d2[p+1], d2[p+2])+MAX(d2[p], d2[p+1], d2[p+2]))/2; break;
+					case 4: d[p] = d[p+1] = d[p+2] = d2[p]; break;
+					case 5: d[p] = d[p+1] = d[p+2] = d2[p+1]; break;
+					case 6: d[p] = d[p+1] = d[p+2] = d2[p+2]; break;
+					default: d[p] = d[p+1] = d[p+2] = (d2[p]*l[0])+(d2[p+1]*l[1])+(d2[p+2]*l[2]);
+				}				
+				if(m && m[i] < 255) IMGFX.PIX_MixSelection(p, d, d2, m[i]/255);
+			}
 			
-				for(; j < dl; j++) {			
-					i = j*4;
-					d[i] = d[i+1] = d[i+2] = (d2[i]*w[0])+(d2[i+1]*w[1])+(d2[i+2]*w[2]);
-				} break;
+			px++;
+			p+=4;
+			if(px == w) {
+				px = 0;
+				py += pw;
+				p = py+o;
+			}
 		}
 		
 		ImageArea.update();
@@ -564,26 +543,29 @@ IMGFX = {
 			b = true;
 		}
 		
-		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, img = IMGFX.GetTarget(), w = img.w, h = img.h, fw = img.fw, o = img.o, dl = h*fw, m = img.m, px = 0, py = 0, i = 0, j = 0, t1 = T();
+		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, img = IMGFX.GetTarget(), w = img.w, h = img.h, fw = img.fw, o = img.o*4, pw = fw*4, dl = w*h, m = img.m, ma, p = o, px = 0, py = 0, i = 0, t1 = T();
 		
-		while(py < dl) {
+		for(; i < dl; i++) {
 			
-			i = (o+px+py)*4;
-			
-			if(!m || m[j] > 0) {
-				if(r) d[i] = 255-d2[i]; else d[i] = d2[i];
-				if(g) d[i+1] = 255-d2[i+1]; else d[i+1] = d2[i+1];
-				if(b) d[i+2] = 255-d2[i+2]; else d[i+2] = d2[i+2];
-				if(m) IMGFX.PIX_MixSelection(i, d, d2, m[j]/255);
-			} else {
-				IMGFX.PIX_Default(i, d, d2);
+			if(!m || m[i] > 0) {
+				if(m && m[i] < 255) {					
+					ma = ((2*m[i])-255)/255;
+					if(r) d[p] = m[i]-(ma*d2[p]); else d[p] = d2[p];
+					if(g) d[p+1] = m[i]-(ma*d2[p+1]); else d[p+1] = d2[p+1];
+					if(b) d[p+2] = m[i]-(ma*d2[p+2]); else d[p+2] = d2[p+2];
+				} else {
+					if(r) d[p] = 255-d2[p]; else d[p] = d2[p];
+					if(g) d[p+1] = 255-d2[p+1]; else d[p+1] = d2[p+1];
+					if(b) d[p+2] = 255-d2[p+2]; else d[p+2] = d2[p+2];
+				}
 			}
 			
 			px++;
-			j++;
+			p+=4;
 			if(px == w) {
 				px = 0;
-				py += fw;
+				py += pw;
+				p = py+o;
 			}
 		}
 		
@@ -598,25 +580,28 @@ IMGFX = {
 	AutoContrast: function() {
 		if(!IMGFX.target) return;
 		
-		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, img = IMGFX.GetTarget(),
-			w = img.w, h = img.h, fw = img.fw, o = img.o, dl = h*fw, min = 255, max = 0, t = 0, mind = 0, maxd = 0, px = 0, py = 0, i = 0, t1 = T();
+		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, img = IMGFX.GetTarget(), m = img.m,
+			w = img.w, h = img.h, fw = img.fw, o = img.o*4, pw = fw*4, dl = w*h, min = 255, max = 0, t = 0, mind = 0, maxd = 0, p = o, px = 0, py = 0, i = 0, t1 = T();
 
 		// First find the brightest and darkest pixels based on average
-		while(py < dl) {
-			i = (o+px+py)*4;
-			t = (d2[i]+d2[i+1]+d2[i+2])/3;
-			if(t < min) {
-				min = t;
-				mind = i;
-			} else if(t > max) {
-				max = t;
-				maxd = i;
+		for(; i < dl; i++) {
+			if(!m || m[i] > 0) {
+				t = (d2[p]+d2[p+1]+d2[p+2])/3;
+				if(t < min) {
+					min = t;
+					mind = p;
+				} else if(t > max) {
+					max = t;
+					maxd = p;
+				}
 			}
 			
 			px++;
+			p+=4;
 			if(px == w) {
 				px = 0;
-				py += fw;
+				py += pw;
+				p = py+o;
 			}
 		}
 				
@@ -631,17 +616,22 @@ IMGFX = {
 		];
 		
 		// Apply transformation to entire image
-		px = py = 0;
-		while(py < dl) {
-			i = (o+px+py)*4;
-			d[i] = 255-ROUND((255-(d2[i]/maxd[0]))/mind[0]);
-			d[i+1] = 255-ROUND((255-(d2[i+1]/maxd[1]))/mind[1]);
-			d[i+2] = 255-ROUND((255-(d2[i+2]/maxd[2]))/mind[2]);
+		px = py = i = 0;
+		p = o;
+		for(; i < dl; i++) {
+			if(!m || m[i] > 0) {
+				d[p] = 255-ROUND((255-(d2[p]/maxd[0]))/mind[0]);
+				d[p+1] = 255-ROUND((255-(d2[p+1]/maxd[1]))/mind[1]);
+				d[p+2] = 255-ROUND((255-(d2[p+2]/maxd[2]))/mind[2]);
+				if(m && m[i] < 255) IMGFX.PIX_MixSelection(p, d, d2, m[i]/255);
+			}
 			
 			px++;
+			p+=4;
 			if(px == w) {
 				px = 0;
-				py += fw;
+				py += pw;
+				p = py+o;
 			}
 		}
 		
@@ -664,41 +654,30 @@ IMGFX = {
 		
 		if(type == null) type = 0;
 		
-		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, dl = IMGFX.tw*IMGFX.th, n = 0, i = 0, j = 0, t1 = T();
+		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, img = IMGFX.GetTarget(), w = img.w, h = img.h, fw = img.fw, o = img.o*4, pw = fw*4, dl = w*h, m = img.m, p = o, px = 0, py = 0, n, i = 0, t1 = T();
 		
-		switch(type) {
+		for(; i < dl; i++) {
+			if(!m || m[i] > 0) {
+				if(type == 1) {
+					d[p] = d2[p]+(val-128);
+					d[p+1] = d2[p+1]+(val-128);
+					d[p+2] = d2[p+2]+(val-128);
+				} else {
+					n = (type == 0 ? 128 : 255-((d2[p]+d2[p+1]+d2[p+2])/3));
+					d[p] = (d2[p]/n)*val;
+					d[p+1] = (d2[p+1]/n)*val;
+					d[p+2] = (d2[p+2]/n)*val;
+				}
+				if(m && m[i] < 255) IMGFX.PIX_MixSelection(p, d, d2, m[i]/255);
+			}
 			
-			// Normal
-			case 0:
-				n = 128;
-				for(; j < dl; j++) {
-					i = j*4;
-					d[i] = (d2[i]/n)*val;
-					d[i+1] = (d2[i+1]/n)*val;
-					d[i+2] = (d2[i+2]/n)*val;
-				}
-				break;
-				
-			// Additive
-			case 1:
-				for(; j < dl; j++) {
-					i = j*4;
-					d[i] = d2[i]+(val-128);
-					d[i+1] = d2[i+1]+(val-128);
-					d[i+2] = d2[i+2]+(val-128);
-				}
-				break;
-				
-			// Glow/Average
-			case 2:
-				for(; j < dl; j++) {
-					i = j*4;
-					n = 255-((d2[i]+d2[i+1]+d2[i+2])/3);
-					d[i] = (d2[i]/n)*val;
-					d[i+1] = (d2[i+1]/n)*val;
-					d[i+2] = (d2[i+2]/n)*val;
-				}
-				break;
+			px++;
+			p+=4;
+			if(px == w) {
+				px = 0;
+				py += pw;
+				p = py+o;
+			}
 		}
 		
 		ImageArea.update();
@@ -712,21 +691,27 @@ IMGFX = {
 	** h = 	The amount to change the hue
 	** 
 	** TODO: Improve performance (especially on Chrome) */
-	ChangeHSL: function(h, s, l) {
+	ChangeHSL: function(hue, sat, lum) {
 		if(!IMGFX.target) return;
 		
-		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, dl = IMGFX.tw*IMGFX.th, p = 0, j = 0, i = 0, t1 = T();
+		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, img = IMGFX.GetTarget(), w = img.w, h = img.h, fw = img.fw, o = img.o*4, pw = fw*4, dl = w*h, m = img.m, p = o, px = 0, py = 0, n, i = 0, t1 = T();
 		
-		for(; j < dl; j++) {
+		for(; i < dl; i++) {
+			if(!m || m[i] > 0) {
+				n = ShiftHSL(d2[p], d2[p+1], d2[p+2], hue, sat, lum);
+				d[p] = n[0];
+				d[p+1] = n[1];
+				d[p+2] = n[2];
+				if(m && m[i] < 255) IMGFX.PIX_MixSelection(p, d, d2, m[i]/255);
+			}
 			
-			i = j*4;
-			
-			p = ShiftHSL(d2[i], d2[i+1], d2[i+2], h, s, l);
-			
-			d[i] = p[0];
-			d[i+1] = p[1];
-			d[i+2] = p[2];
-			
+			px++;
+			p+=4;
+			if(px == w) {
+				px = 0;
+				py += pw;
+				p = py+o;
+			}
 		}
 		
 		ImageArea.update();
@@ -787,23 +772,7 @@ IMGFX = {
 	Shift: function(x, y) {
 		if(!IMGFX.target) return;
 		
-		/*
-		** d =  	image data to write to
-		** d2 =		image data to read from
-		** w =		image width
-		** h =		image height
-		** dl =		loop iterations
-		** dl4 =	indicies in image data
-		** pw =		indicies per row
-		** s =		starting index of row
-		** e =		starting index of next row
-		** p =		pixel to read from
-		** i =		pixel to write to
-		** j = 		loop var
-		** t1 =		precision timing
-		*/
-		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, w = IMGFX.tw, h = IMGFX.th,
-			dl = w*h, dl4 = dl*4, pw = w*4, s, e = 0, p, i, j = 0, t1 = T();
+		var img = IMGFX.GetTarget(), w = img.w, h = img.h, pw2 = w*4;
 		
 		// Set defaults (offset image halfway)
 		if(x == undefined) { x = FLOOR(w/2); }
@@ -814,31 +783,34 @@ IMGFX = {
 		y = (y%h);
 		
 		// Convert negative offsets to positive
-		if(x < 0) x = pw+x;
+		if(x < 0) x = pw2+x;
 		if(y < 0) y = h+y;
+			
+		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, fw = img.fw, o = img.o*4,
+			pw = fw*4, dl = w*h, m = img.m, p = o, px = 0, n, i = 0, s = o, e = s+(w*4)-x, pwy = pw*y, dlo = pw*h, t1 = T();
 		
-		for(; j < dl; j++) {
+		for(; i < dl; i++) {
 			
-			i = j*4;
+			n = (p-s) + e - pwy;
 			
-			// Catch index of start of current line and start of next line
-			if(j % w == 0) {
-				e += pw;
-				s = e-pw;
+			if(p-s >= x) n -= pw2;
+			if(n < o) n += dlo;
+			
+			if(!m || m[i] > 0) {
+				d[p] = d2[n];
+				d[p+1] = d2[n+1];
+				d[p+2] = d2[n+2];
+				d[p+3] = d2[n+3];
 			}
 			
-			// Calculate shift
-			p = (i-s) + (e-x) - (pw*y);
-			
-			// Wrap shift
-			if(i-s >= x) p -= pw;
-			if(p < 0) p += dl4;
-			
-			// Apply shift
-			d[i] = d2[p];
-			d[i+1] = d2[p+1];
-			d[i+2] = d2[p+2];
-			d[i+3] = d2[p+3];
+			px++;
+			p+=4;
+			if(px == w) {
+				px = 0;
+				s += pw;
+				e += pw;
+				p = s;
+			}
 		}
 		
 		ImageArea.update();
@@ -851,32 +823,58 @@ IMGFX = {
 	/* Rotate picture
 	** Only works in 90 degree turns
 	** TODO: Implement 180 and 270 turns as well as arbitrary rotation */
-	Rotate: function(deg) {
+	Rotate: function(deg, arb) {
 		if(!IMGFX.target) return;
 		
-		if(deg != 1 && deg != -1) deg = 1;
+		arb = false;	// Not implemented yet
 		
-		var w = IMGFX.tw, h = IMGFX.th, pw = w*4, ph = h*4;
+		if(!arb && deg != 90 && deg != -90) deg = 90;
 		
-		IMGFX.SetTarget(ImageData(h, w));
+		var last = IMGFX.GetHistory("last").img, d2 = last.data, w = last.width, h = last.height, rad = (deg/180)*PI, cos = COS(rad), sin = SIN(rad), pw = w*4, ph = h*4, new_w = ABS(FLOOR(w*cos+h*sin)), new_h = ABS(FLOOR(h*cos+w*sin));
 		
-		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, dl = w*h*4, s, m, p, i = 0, t1 = T();
+		IMGFX.SetTarget(ImageData(new_w, new_h));
+		
+		var d = IMGFX.td, dl = w*h*4, s, m, p, i = 0, t1 = T();
 	
-		for(; i < dl; i += 4) {
+		// 90 degree turns
+		if(!arb) {
+			for(; i < dl; i += 4) {
+				
+				m = (i/4)%h;
+				if(m == 0) s = (i/ph)*4;
+				
+				if(deg == 90)
+					p = (pw*(h-m-1))+s;
+				else
+					p = (pw*(m+1))-4-s;
+				
+				d[i] = d2[p];
+				d[i+1] = d2[p+1];
+				d[i+2] = d2[p+2];
+				d[i+3] = d2[p+3];
+			}
 			
-			m = (i/4)%h;
-			if(m == 0) s = (i/ph)*4;
+		// Arbitrary degree turns
+		}/* else {
 			
-			if(deg == 1)
-				p = (pw*(h-m-1))+s;
-			else
-				p = (pw*(m+1))-4-s;
+			var sx = FLOOR(-w/2), sy = FLOOR(-h/2), ex = CEIL(w/2), ey = CEIL(h/2), px = sx, py = sy, new_w2 = FLOOR(new_w/2), new_h2 = FLOOR(new_h/2);
 			
-			d[i] = d2[p];
-			d[i+1] = d2[p+1];
-			d[i+2] = d2[p+2];
-			d[i+3] = d2[p+3];
-		}
+			for(; i < dl; i += 4) {
+				
+				p = ((FLOOR(px*cos+py*sin)+new_w2)+((FLOOR(py*cos-px*sin)+new_h2)*new_w))*4;
+				
+				d[p] = d2[i];
+				d[p+1] = d2[i+1];
+				d[p+2] = d2[i+2];
+				d[p+3] = d2[i+3];
+				
+				px++;
+				if(px == ex) {
+					px = sx;
+					py++;
+				}
+			}
+		}*/
 		
 		ImageArea.update();
 		
@@ -894,31 +892,36 @@ IMGFX = {
 	Mirror: function(x, y) {
 		if(!IMGFX.target) return;
 		
-		var d = IMGFX.td, w = IMGFX.tw, h = IMGFX.th, d2 = IMGFX.GetHistory("last").img.data, dl = w*h, pw = w*4, s = 0, e = 0, p = 0, i = 0, j = 0, t1 = T();
+		var d = IMGFX.td, img = IMGFX.GetTarget(), w = img.w, h = img.h, d2 = IMGFX.GetHistory("last").img.data, o = img.o*4,
+			pw = img.fw*4, dl = w*h, m = img.m, p = o, px = 0, n, i = 0, s = o, e = o+(w*4), py = e+(pw*(h-1)), t1 = T();
 	
-		for(; j < dl; j++) {
-			
-			i = j*4;
-			
-			if(j % w == 0) {
-				e += pw;
-				s = e-pw;
-			}
+		for(; i < dl; i++) {
 			
 			if(x && y)
-				p = pw*(h-(e/pw)+1)-(i-s);
+				n = py-(p-s)-4;
 			else if(x)
-				p = pw*(h-(e/pw)+1)+(i-e);
+				n = py-(e-p);
 			else if(y)
-				p = e-(i-s)-4;
+				n = e-(p-s)-4;
 			else
-				p = i;
-				
+				n = p;
 			
-			d[i] = d2[p];
-			d[i+1] = d2[p+1];
-			d[i+2] = d2[p+2];
-			d[i+3] = d2[p+3];
+			if(!m || m[i] > 0) {
+				d[p] = d2[n];
+				d[p+1] = d2[n+1];
+				d[p+2] = d2[n+2];
+				d[p+3] = d2[n+3];
+			}
+			
+			px++;
+			p+=4;
+			if(px == w) {
+				px = 0;
+				py -= pw;
+				s += pw;
+				e += pw;
+				p = s;
+			}
 		}
 		
 		ImageArea.update();
@@ -938,22 +941,36 @@ IMGFX = {
 			grad = [ARCPY(MainColors.bg), ARCPY(MainColors.fg)];
 		}
 		
-		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, dl = IMGFX.tw*IMGFX.th*4, t, i = 0, c, k, g = grad.length-1, f = 1/g, t1 = T();
+		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, img = IMGFX.GetTarget(), w = img.w, o = img.o*4, m = img.m, pw = img.fw*4, dl = w*img.h,
+			p = o, px = 0, py = 0, t, i = 0, c, k, g = grad.length-1, f = 1/g, t1 = T();
 		
-		for(; i < dl; i += 4) {
+		for(; i < dl; i++) {
+			if(!m || m[i] > 0) {				
+				// BT.709 Grayscale conversion
+				t = ((d2[p]*0.2126)+(d2[p+1]*0.7152)+(d2[p+2]*0.0722))/255;
+				
+				// End color index
+				c = CEIL(g*t);
+				if(c == 0) c++;
+				
+				// Color weight 'k' based on position 't' in gradient and start color index 'c-1'
+				k = (t-(f*(c-1)))*g;
 			
-			// BT.709 Grayscale conversion
-			t = ((d2[i]*0.2126)+(d2[i+1]*0.7152)+(d2[i+2]*0.0722))/255;
+				d[p] = (grad[c-1][0]*(1-k))+(grad[c][0]*k);
+				d[p+1] = (grad[c-1][1]*(1-k))+(grad[c][1]*k);
+				d[p+2] = (grad[c-1][2]*(1-k))+(grad[c][2]*k);
+				d[p+3] = (grad[c-1][3]*(1-k))+(grad[c][3]*k);
+				
+				if(m && m[i] < 255) IMGFX.PIX_MixSelectionAlpha(p, d, d2, m[i]/255);
+			}
 			
-			c = CEIL(g*t);
-			if(c == 0) c++;
-			k = (t-(f*(c-1)))/f;
-			
-			d[i] = (grad[c-1][0]*(1-k))+(grad[c][0]*k);
-			d[i+1] = (grad[c-1][1]*(1-k))+(grad[c][1]*k);
-			d[i+2] = (grad[c-1][2]*(1-k))+(grad[c][2]*k);
-			d[i+3] = (grad[c-1][3]*(1-k))+(grad[c][3]*k);
-			
+			px++;
+			p+=4;
+			if(px == w) {
+				px = 0;
+				py += pw;
+				p = py+o;
+			}			
 		}
 		
 		ImageArea.update();
@@ -967,24 +984,37 @@ IMGFX = {
 	ReplaceColor: function(ca, cb, tol) {
 		if(!IMGFX.target || tol == null || tol < 0) return;
 				
-		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, dl = IMGFX.tw*IMGFX.th*4, i = 0, t, t1 = T();
+		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, img = IMGFX.GetTarget(), w = img.w, o = img.o*4, m = img.m, pw = img.fw*4, dl = w*img.h,
+			p = o, px = 0, py = 0, i = 0, t, t1 = T();
 		
-		for(; i < dl; i += 4) {
-			
-			t = (ABS(d2[i]-ca[0])+ABS(d2[i+1]-ca[1])+ABS(d2[i+2]-ca[2]))/tol;
-			
-			if(t <= 1) {
-				d[i] = CEIL(d2[i]*t + cb[0]*(1-t));
-				d[i+1] = CEIL(d2[i+1]*t + cb[1]*(1-t));
-				d[i+2] = CEIL(d2[i+2]*t + cb[2]*(1-t));
-				d[i+3] = CEIL(d2[i+3]*t + cb[3]*(1-t));
-			} else {
-				d[i] = d2[i];
-				d[i+1] = d2[i+1];
-				d[i+2] = d2[i+2];
-				d[i+3] = d2[i+3];
+		for(; i < dl; i++) {
+			if(!m || m[i] > 0) {				
+				// Get color difference
+				// TODO: Better way of determining this
+				t = (ABS(d2[p]-ca[0])+ABS(d2[p+1]-ca[1])+ABS(d2[p+2]-ca[2]))/tol;
+				
+				if(t <= 1) {
+					d[p] = CEIL(d2[p]*t + cb[0]*(1-t));
+					d[p+1] = CEIL(d2[p+1]*t + cb[1]*(1-t));
+					d[p+2] = CEIL(d2[p+2]*t + cb[2]*(1-t));
+					d[p+3] = CEIL(d2[p+3]*t + cb[3]*(1-t));
+				} else {
+					d[p] = d2[p];
+					d[p+1] = d2[p+1];
+					d[p+2] = d2[p+2];
+					d[p+3] = d2[p+3];
+				}
+				
+				if(m && m[i] < 255) IMGFX.PIX_MixSelectionAlpha(p, d, d2, m[i]/255);
 			}
 			
+			px++;
+			p+=4;
+			if(px == w) {
+				px = 0;
+				py += pw;
+				p = py+o;
+			}			
 		}
 		
 		ImageArea.update();
@@ -1001,118 +1031,45 @@ IMGFX = {
 		if(a == undefined || a < 0)
 			a = 64;
 		
-		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, dl = IMGFX.tw*IMGFX.th, t = 0, j = 0, i = 0, m = a*2, t1 = T();
+		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, img = IMGFX.GetTarget(), w = img.w, o = img.o*4, m = img.m, pw = img.fw*4, dl = w*img.h,
+			p = o, px = 0, py = 0, i = 0, t, a2 = a*2, t1 = T();
 		
-		for(; j < dl; j++) {			
-			i = j*4;
+		for(; i < dl; i++) {
+			if(!m || m[i] > 0) {
+				
+				t = FLOOR(RND()*a2)-a;
+				
+				d[p] = d2[p]+t;
+				d[p+1] = d2[p+1]+t;
+				d[p+2] = d2[p+2]+t;
+				
+				if(m && m[i] < 255) IMGFX.PIX_MixSelection(p, d, d2, m[i]/255);
+			}
 			
-			t = (RND()*m)-a;
-			d[i] = d2[i]+t;
-			d[i+1] = d2[i+1]+t;
-			d[i+2] = d2[i+2]+t;
+			px++;
+			p+=4;
+			if(px == w) {
+				px = 0;
+				py += pw;
+				p = py+o;
+			}			
 		}
 		
 		ImageArea.update();
 		
 		//CL("AddNoise("+a+"): "+(T()-t1));
 		
-		return T()-t1;		
-	},
-	
-	/* Median noise reduction by value
-	** r =	sample radius
-	**
-	** Only read pixels not already known and overwrite pixels no longer within radius
-	** I.e. radius = 1 means only read the right-most 3 pixels as progress is made
-	** This reduces a potential exponential O((1 + r*2)^2) algorithm to just O(1 + r*2)
-	** 
-	** TODO: Fix the right-ward smearing effect */
-	BoxBlur: function(r) {
-		if(!IMGFX.target) return;
-		
-		if(!r || r < 1) r = 1;
-		
-		/*
-		*	dl =	loop iterations / pixels
-		*	ppl =	pixels per line (times 4 for indexes)
-		*	pr =	pixels per line in radius
-		*	r2 = 	number of pixels compared per loop iteration
-		*	rh = 	median index in luma array
-		*	l = 	array of luma tones
-		*	m = 	median temp var
-		*	i = 	pixel index
-		*	j = 	loop count
-		*	k = 	radius loop count
-		*	t1 = 	algorithm start time
-		*/
-		
-		var d = IMGFX.td, w = IMGFX.tw, h = IMGFX.th, d2 = IMGFX.GetHistory("last").img.data, dl = w*h, ppl = w*4, pr = 1 + r*2,
-			r2 = pr*pr, r4 = (r*4), rh = CEIL(r2/2)-1, l = new Array(r2), p, m, s, e = 0, i, j = 0, k, mi1, mi2, mi3, mi4, t1 = T();
-			
-		for(var ll = 0; ll < r2; ll++) {
-			l[ll] = 128;
-		}
-	
-		for(; j < dl; j++) {
-			
-			i = j*4;
-			
-			if(j % w == 0) {
-				e += ppl;
-				s = e-ppl;
-				mi1 = d[i], mi2 = d[i+1], mi3 = d[i+2], mi4 = d[i+3];
-			}
-			
-			for(k = 0; k < pr; k++) {
-			
-				p = ((k-r)*ppl)+r4;
-				
-				//l.shift();
-			
-				if(i+p > -1 && i+p < dl*4 && i+r4 < e) {
-					
-					//l.push((d2[i+p]+d2[i+p+1]+d2[i+p+2])/3);
-					//mi = ((mi*(r2-1))+((d2[i+p]+d2[i+p+1]+d2[i+p+2])/3))/r2;
-					mi1 = ((mi1*(r2-1))+d2[i+p])/r2
-					mi2 = ((mi2*(r2-1))+d2[i+1+p])/r2
-					mi3 = ((mi3*(r2-1))+d2[i+2+p])/r2
-					mi4 = ((mi4*(r2-1))+d2[i+3+p])/r2
-				} else {
-					//l.push((d2[i]+d2[i+1]+d2[i+2])/3);
-					//mi = ((mi*(r2-1))+((d2[i]+d2[i+1]+d2[i+2])/3))/r2;
-					mi1 = ((mi1*(r2-1))+d2[i])/r2
-					mi2 = ((mi2*(r2-1))+d2[i+1])/r2
-					mi3 = ((mi3*(r2-1))+d2[i+2])/r2
-					mi4 = ((mi4*(r2-1))+d2[i+3])/r2
-					
-					//mi1 = 255, mi2 = 0, mi3 = 0;
-				}
-			}
-			
-			//m = l[rh];
-			
-			d[i] = mi1;
-			d[i+1] = mi2;
-			d[i+2] = mi3;
-			d[i+3] = mi4;
-			
-		}
-		
-		ImageArea.update();
-		
-		//CL("Reduce Noise("+r+"): "+(T() - t1));
-		
 		return T()-t1;
 	},
 	
 	/* Draw pixel by pixel */
-	ApplyPencil: function(x, y, c, erase) {
+	ApplyPencil: function(x, y, c, restore) {
 		if(!IMGFX.target) return;
 		
 		var d = IMGFX.td, p = (x+(y*IMGFX.tw))*4;		
 		if(p < 0 || p >= d.length) return;
 		
-		if(erase) {
+		if(restore) {
 			// Load from last non-pencil history state
 			var h = IMGFX.history, i = IMGFX.current;
 			for(; i >= 0; i--) {
@@ -1132,29 +1089,23 @@ IMGFX = {
 			d[p+2] = c[2];
 			d[p+3] = c[3];
 		}
-		
-		ImageArea.update();		
 	},
 	
 	/* Apply a brush to the image */
 	ApplyBrush: function(x, y, c, brush, erase) {
 		if(!IMGFX.target) return;
 		
-		var d = IMGFX.td, w = IMGFX.tw, h = IMGFX.th, dl = d.length,
-		bd = brush.data, bw = brush.width, bh = brush.height, bdl = bw*bh,
+		var d = IMGFX.td, w = IMGFX.tw, h = IMGFX.th, dl = w*h*4,
+		bd = brush.data, bw = brush.width, bh = brush.height, bdl = bw*bh*4,
 		r1 = FLOOR(bw/2), r2 = FLOOR(bh/2), pw = w*4,
-		bs = ((x-r1)+((y-r2)*w))*4, p = bs, 
-		i = 0, j = 0, a1 = 0, a2 = 0;
+		bs = ((x-r1)+((y-r2)*w))*4, p = bs, px = 0, py = 0,
+		i = 0, a1 = 0, a2 = 0, p0 = (x-r1)*4, s = (y-r2-1)*pw, e = s+pw;
 		
-		if(c == undefined) {
-			c[0] = 255, c[1] = 0, c[2] = 0, c[3] = 255;
-		}
+		if(c == null) c[0] = 255, c[1] = 0, c[2] = 0, c[3] = 255;
 		
-		for(; j < bdl; j++) {
+		for(; i < bdl; i += 4) {
 			
-			i = j*4;
-			
-			if(p >= 0 && p < dl) {
+			if(p >= 0 && p < dl && p >= s && p < e) {
 				a1 = (c[3]*bd[i+3])/255;
 				a2 = a1/255;
 				if(erase) {
@@ -1167,13 +1118,15 @@ IMGFX = {
 				}
 			}
 			
-			if(j % bw == 0)
-				p = bs+(j/bw)*pw;
-			else
-				p += 4;
-			
-		}		
-		ImageArea.update();		
+			px++;
+			if(px == bw) {
+				py++;
+				px = 0;
+				s = e;
+				e += pw;
+				p = s+p0;
+			} else p += 4;			
+		}
 	},
 	
 	/* Compute the averages for image comparison
@@ -1344,22 +1297,34 @@ IMGFX = {
 	** iter		# of times to run the function
 	** freq		Timeout frequency or rest time
 	** sum, cb	Recursion variables */
-	SpeedTest: function(func, arg, iter, freq, sum, cb) {		
+	SpeedTest: function(func, arg, iter, freq, sum, cb) {
+		// Return total time
 		if(iter < 1) {
 			cb(sum);
 			return;
 		}
-		if(sum == null) {
+		
+		// Start and end test
+		if(sum == null) {			
+			// Make sure we're not already speed testing
+			if(IMGFX.speedTesting) {
+				CL("A speed test is already being run. Wait until it ends or refresh.");
+				return;
+			}			
 			sum = 0;
 			CL("Performing speed test for "+func+"...");
+			IMGFX.speedTesting = true;
 			cb = function(s) {
 				var avg = s/iter;
 				CL("Average time for "+func+": "+(ROUND(avg*1000)/1000)+" ms ("+ROUND((1/avg)*1000)+" FPS)");
+				IMGFX.speedTesting = false;
 			}
 		}
 		
+		// Add time
 		sum = sum+IMGFX[func].apply(IMGFX, arg);
 		
+		// Iterate
 		if(freq > 0) {
 			setTimeout(function() {
 				IMGFX.SpeedTest(func, arg, iter-1, freq, sum, cb);
@@ -1488,16 +1453,13 @@ IMGFX = {
 	},
 	 
 	/* Fill tool */
-	// TODO: Figure out how to bypass the "Too much recursion" error
+	// TODO: Bypass the "Too much recursion" error, only seems to occur during large maze tests
 	Fill: function(x, y, col, tol) {
 		if(!IMGFX.target) return;
 	
 		var t1 = T(), d = IMGFX.td, w = IMGFX.tw, h = IMGFX.th, pw = w*4, last = IMGFX.GetHistory("last");
 		
 		if(!last) return;
-		
-		CB = 0;
-		Bla = new Array();
 		
 		var d2 = last.img.data, dl = w*h, dl4 = dl*4, s = (x+(y*w))*4, filled = new Uint8ClampedArray(dl), sc = [d2[s], d2[s+1], d2[s+2]], scsum = sc[0]+sc[1]+sc[2],
 		
@@ -1510,6 +1472,7 @@ IMGFX = {
 			d[i] = (d2[i]*diff)+(col[0]*(1-diff));
 			d[i+1] = (d2[i+1]*diff)+(col[1]*(1-diff));
 			d[i+2] = (d2[i+2]*diff)+(col[2]*(1-diff));
+			d[i+3] = (d2[i+3]*diff)+(col[3]*(1-diff));
 			filled[i/4] = 1;
 		},
 		
@@ -1518,65 +1481,154 @@ IMGFX = {
 		},
 		
 		fillSegment = function(p) {
-			CB++;
-			var div = p/pw, start_w = FLOOR(div)*pw, end_w = (FLOOR(div)+1)*pw, e = -4, i = p, min_above = null, min_below = null, c = 0;
-			Bla.push(FLOOR(div));
+			var div = p/pw, start_w = FLOOR(div)*pw, end_w = (FLOOR(div)+1)*pw, sw = start_w, ew = end_w, e = -4, i = p, above = null, below = null, hit = false, c = 0;
 			
-			if(isBorder(p, start_w, end_w)) return;
+			// Stop once the initial pixel is already filled
+			if(isBorder(p, sw, ew))	return;
+			
+			// This prevents wasteful recursion if the left side is blocked initially
+			if(isBorder(p-4, sw, ew)) e = 4;
 			
 			while(c < 10000) {
 				
-				// Check above
-				if(!isBorder(i-pw, 0, dl4, true)) {
-					min_above = i-pw;
-				} else {
-					if(min_above != null) {
-						//fillSegment(min_above);
-						fillDot(min_above, 0);
-						min_above = null;
+				if(e == 4 || e == -4) {
+					
+					// Check current
+					hit = isBorder(i, sw, ew);
+							
+					// Check above
+					if(!hit && !isBorder(i-pw, 0, dl4, true)) {
+						above = i-pw;
+					} else {
+						if(above != null) {
+							fillSegment(above);
+							//fillDot(above, 0);
+							above = null;
+						}
 					}
-				}
-				
-				// Check below
-				if(!isBorder(i+pw, 0, dl4, true)) {
-					min_below = i+pw;
+					
+					// Check below
+					if(!hit && !isBorder(i+pw, 0, dl4, true)) {
+						below = i+pw;
+					} else {
+						if(below != null) {
+							fillSegment(below);
+							//fillDot(below, 0);
+							below = null;
+						}
+					}
 				} else {
-					if(min_below != null) {
-						//fillSegment(min_below);
-						fillDot(min_below, 0);
-						min_below = null;
+					// Check current
+					hit = isBorder(i, 0, dl4);
+					
+					// Check left
+					if(!hit && !isBorder(i-4, sw, ew, true)) {
+						above = i-4;
+					} else {
+						if(above != null) {
+							fillSegment(above);
+							//fillDot(above, 0);
+							above = null;
+						}
+					}
+					
+					// Check right
+					if(!hit && !isBorder(i+4, sw, ew, true)) {
+						below = i+4;
+					} else {
+						if(below != null) {
+							fillSegment(below);
+							//fillDot(below, 0);
+							below = null;
+						}
 					}
 				}
 				
 				// Check current
-				if(isBorder(i, start_w, end_w)) {
+				if(hit) {
 					if(e == -4) {
 						e = 4;
-						i = p+4;
-						continue;
+					} else if(e == 4) {
+						e = pw;
+					} else if(e == pw) {
+						e = -pw;	
 					} else {
 						return;
 					}
+					i = p;
+					sw = start_w;
+					ew = end_w;
+				} else {
+					fillDot(i, getTol(i));
 				}
 				
-				//fillDot(i, 0);
-				
 				i += e;
+				if(e == pw || e == -pw) {
+					sw += e;
+					ew += e;
+				}
 				c++;
 			}
 			if(c >= 10000) CL("Infinite loop...");
 		}
 		
 		fillSegment(s);
-		//traceBorder(s);
 		
 		//CL("Fill("+x+", "+y+", "+col+", "+tol+"): "+(T()-t1));
 		
-		//IMGFX.AddHistory("Fill");
+		ImageArea.update();
 		
-		Bla.sort(function(a,b){return a-b;});
+		return T()-t1;
+	},
+	
+	
+	/* Box blurring
+	** r =	blur radius
+	**
+	** Only read pixels not already known and overwrite pixels no longer within radius
+	** I.e. radius = 1 means only read the right-most 3 pixels as progress is made
+	** This reduces a potential exponential O((1 + r*2)^2) algorithm to just O(1 + r*2)
+	** 
+	** TODO: Fix the right-ward smearing effect */
+	BoxBlur: function(r) {
+		if(!IMGFX.target) return;
+		
+		if(!r || r < 1) r = 1;
+		
+		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, img = IMGFX.GetTarget(), w = img.w, h = img.h, o = img.o*4, m = img.m, dl = w*h*4, pw = img.fw*4, pr = 1 + r*2,
+			r2 = pr*pr, r4 = r*4, rh = CEIL(r2/2)-1, p, px = 0, py = 0, m, s = o, e = o+pw, i = 0, k, mi1, mi2, mi3, mi4, t1 = T();
+	
+		for(; i < dl; i += 4) {
+			
+			mi1 = mi2 = mi3 = mi4 = rh = 0;
+			for(k = 0; k < pr; k++) {
+				p = ((k-r)*pw)+r4;				
+			
+				if(i+p > -1 && i+p < dl && i+r4 < e) {
+					mi1 += d2[i+p];
+					mi2 += d2[i+p+1];
+					mi3 += d2[i+p+2];
+					mi4 += d2[i+p+3];
+					rh++;
+				}
+			}			
+			
+			d[i] = mi1/rh;
+			d[i+1] = mi2/rh;
+			d[i+2] = mi3/rh;
+			d[i+3] = mi4/rh;
+			
+			px++;
+			if(px == w) {
+				px = 0;
+				s += pw;
+				e += pw;					
+			}
+		}
 		
 		ImageArea.update();
+		
+		//CL("Reduce Noise("+r+"): "+(T() - t1));
 		
 		return T()-t1;
 	},

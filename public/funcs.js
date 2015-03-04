@@ -25,13 +25,21 @@ GRY = "#666";
 CurrentTheme = 0;
 
 /* Drawing update vars */
-MouseX = 0;
-MouseY = 0;
+CWIDTH = 0;
+CHEIGHT = 0;
+Cursor = "auto";
+MouseX = MouseY = LastMouseX = LastMouseY = -1;
 LastUpdate = 0;
 Frame = 0;
-Icons = [];
-FocusObj = undefined;
+FocusObj = null;
 ZOOM = 1;
+IMG_NAME = null;
+ImageArea = null;
+
+/* Icon sprite sheet */
+ALPHA_BG = null;
+ERROR_IMG = null;
+IC_SMALL = null;
 
 /* Basic input */
 CTRL = SHIFT = ALT = MDOWN = LCLICK = RCLICK = false;
@@ -53,7 +61,28 @@ NODE_SERVER = "";
 LOCAL = (window.location.host == "" || window.location.host == "localhost");
 
 // Math function aliases
-ABS = Math.abs, MAX = Math.max, MIN = Math.min, CEIL = Math.ceil, FLOOR = Math.floor, ROUND = Math.round, RND = Math.random, POW = Math.pow, SQRT = Math.sqrt;
+ABS = Math.abs, MAX = Math.max, MIN = Math.min, CEIL = Math.ceil, FLOOR = Math.floor, ROUND = Math.round, RND = Math.random, POW = Math.pow, SQRT = Math.sqrt, PI = Math.PI, COS = Math.cos, SIN = Math.sin, HYP = Math.hypot;
+
+function insert(line, start, l, t) {
+	
+	if(!line) return -1;
+	
+	var mid = start+FLOOR(l/2);
+	
+	// Break out
+	if(l == 0) {
+		return start;
+	}
+	
+	if(t < line[mid]) {
+		CL("LEFT");
+		return insert(line, start, mid, t);
+	} else if(t > line[mid]) {
+		CL("RIGHT");
+		return insert(line, mid+1, mid, t)
+	}
+	return start;
+}
 
 /* Array copy I would make this an Array.prototype function but that usually breaks everything, so let's play it safe */
 function ARCPY(arr) {
@@ -71,7 +100,7 @@ function CL() {
 		var a = new Array(arguments.length), i = 0;
 		for(; i < arguments.length; i++) {
 			a[i] = arguments[i];
-			if(!THREE_MSG && a[i].indexOf && a[i].indexOf("THREE.") == 0) return;
+			if(!THREE_MSG && a[i] && a[i].indexOf && a[i].indexOf("THREE.") == 0) return;
 		}
 		console.log(a);
 	} else {
@@ -84,6 +113,7 @@ function WARN(str) {
 	if(!THREE_MSG && str.indexOf("THREE.") == 0) return;
 	console.warn(str);
 }
+
 function ERR(str) { console.error(str); }
 
 /* Get canvas 2D context */
@@ -91,7 +121,7 @@ function GC(c) { return c.getContext("2d"); }
 
 /* Set cursor */
 function SC(cursor) {
-	canvas.style.cursor = cursor == undefined ? "auto" : cursor;
+	Cursor = cursor == undefined ? "auto" : cursor;
 }
 
 /* Get element alias */
@@ -111,7 +141,7 @@ function T() { return window.performance.now(); }
 
 /* Test within bounds (object based) */
 function WB(x, y, obj) {
-	if(!obj || obj.x == undefined || obj.y == undefined || obj.w == undefined || obj.h == undefined) return false;
+	if(!obj || obj.x == null || obj.y == null || obj.w == null || obj.h == null) return false;
 	return x >= obj.x && x <= obj.x+obj.w && y >= obj.y && y <= obj.y+obj.h;
 }
 
@@ -126,6 +156,72 @@ function Clamp(num, min, max) {
 	num < min ? num = min : num;
 	num > max ? num = max : num;
 	return num;
+}
+
+/* Linear interpolation between 2D points using Bresenham */
+function Lerp2D(x1, y1, x2, y2) {
+	
+	if(x1-x2 == 0 && y1-y2 == 0) return [x1, y1];
+	
+	// Switch variable and original starting points
+	var t = false, sx = x1, sy = y1, lineSize = (MAX(ABS(x2-x1), ABS(y2-y1))+1)*2;
+	
+	// Set center to (0, 0) since it makes life a lot easier
+	x2 -= x1;
+	y2 -= y1;
+	x1 = y1 = 0;
+	
+	// Switch before I do anything
+	if(ABS(x2-x1) < ABS(y2-x1)) {
+		t = y2;
+		y2 = x2;
+		x2 = t;
+		t = true;	// Switch x and y when plotting
+	}
+	
+	var dx = ABS(x2-x1), dy = ABS(y2-x1), yinc = (x2 > x1 ? (y1 > y2 ? -1 : 1) : (y1 > y2 ? 1 : -1)), p = 2*dy-dx, twoDy = 2*dy, twoDyMinusDx = 2*(dy-dx), buf = new Uint16Array(lineSize), x = 0, y = 0, b = 0;
+
+	// Decide start points
+	if(x1 > x2) {
+		x = x2;
+		y = y2;
+		x2 = x1;
+	} else {
+		x = x1;
+		y = y1;
+	}
+	
+	// Increment
+	while(b < lineSize) {
+		
+		// Next point
+		if(t) {
+			buf[b] = y+sx
+			buf[b+1] = x+sy;
+		} else {
+			buf[b] = x+sx;
+			buf[b+1] = y+sy;
+		}
+		
+		x++;
+		
+		if(p < 0) {
+			p += twoDy;
+		} else {
+			y += yinc;
+			p += twoDyMinusDx;
+		}
+		
+		
+		b += 2;
+	}
+	
+	return buf;
+}
+
+/* Convert bytes to KB, MB, etc. */
+function ByteString(b) {
+	return b >= 1000 ? (b >= 1000000 ? ROUND((b/1000000)*10)/10 + " MB" : ROUND((b/1000)*10)/10 + " KB") : b+" B"
 }
 
 /* Go fullscreen */
@@ -179,8 +275,9 @@ function RecurCall(obj, func) {
 function FixCanvasSize() {
 
 	if(canvas.width != canvas.clientWidth || canvas.height != canvas.clientHeight) {
-		canvas.width = canvas.clientWidth;
-		canvas.height = canvas.clientHeight;
+		CWIDTH = canvas.width = canvas.clientWidth;
+		CHEIGHT = canvas.height = canvas.clientHeight;
+		if(ImageArea) ImageArea.update();
 		Update();
 	}
 	
@@ -292,8 +389,12 @@ function StartEditor() {
 	
 	document.title = "Photoblob - Loading...";
 
+	// Load images
 	ALPHA_BG = IMG("alpha.png");
 	ERROR_IMG = IMG("icons/error.svg");
+	IC_SMALL = IMG("icons/icons_small.svg");
+	
+	// Init canvas
 	canvas = E("editor");
 	if(!canvas) return;
 	
@@ -362,7 +463,22 @@ function Update() {
 /* Detect mouse events */
 function MouseDetect(event) {
 	
-	var t = event.target, type = (event.type.indexOf("Scroll") > -1 ? "wheel" : (event.type == "contextmenu" ? "rclick" : event.type.replace("mouse", "")));
+	var t = event.target,
+	
+		// This is the best cross-browser method of getting canvas coords
+		x = FLOOR(event.clientX-t.getBoundingClientRect().left),
+		y = FLOOR(event.clientY-t.getBoundingClientRect().top),
+		
+		// Type (without "mouse" before it)
+		type = (event.type.indexOf("Scroll") > -1 ? "wheel" : (event.type == "contextmenu" ? "rclick" : event.type.replace("mouse", "")));
+	
+	// Used for interpolating movement
+	if(type == "move") {
+		LastMouseX = MouseX;
+		LastMouseY = MouseY;
+	}
+	MouseX = x;
+	MouseY = y;
 	
 	// Stop click events here, passing them to the detections is redudant
 	if(type == "rclick") {
@@ -371,19 +487,14 @@ function MouseDetect(event) {
 		RCLICK = true;
 		return;
 	} else if(type == "click") {
+		if(CTRL && ALT) {
+			OpenDialog();
+			CTRL = ALT = false;
+		}
 		LCLICK = true;
-		return;
+		// I would return here since "up" and "click" are almost interchangable
+		// But I need to send click for "protected" events like window.open (used in HyperLink)
 	}
-	
-	// This is the best cross-browser way of getting accurate canvas click coords
-	var x = FLOOR(event.clientX-t.getBoundingClientRect().left);
-	var y = FLOOR(event.clientY-t.getBoundingClientRect().top);
-	
-	MouseX = x;
-	MouseY = y;
-	
-	// Clear cursor - I should never need to call this anywhere else
-	SC();
 	
 	// Mouse down toggle
 	if(type == "down") MDOWN = true;
@@ -409,7 +520,7 @@ function MouseDetect(event) {
 	}
 	
 	// Detect for all layers
-	// Passed values are: "down", "up", "wheeldown", and "wheelup"
+	// Passed values are: "click", "down", "up", "wheeldown", and "wheelup"
 	if(!PBOX.detect(x, y, type)) {
 		if(!MenuBar.detect(x, y, type)) {
 			ToolBox.detect(x, y, type);
@@ -417,7 +528,12 @@ function MouseDetect(event) {
 			EditArea.detect(x, y, type);
 			UVMap.detect(x, y, type);
 		}
-	}	
+	}
+	
+	// After all detects are done
+	if(Cursor != canvas.style.cursor)
+		canvas.style.cursor = Cursor;
+	SC();
 }
 
 /* Detect keyboard events */
@@ -882,12 +998,17 @@ function OpenDialog() {
 /* Open image in editor */
 function OpenImage(src, name) {
 	CloseImage();
-	var img = IMG(src);
-	ImageArea.open = true;
-	ImageArea.tempimg = img;
-	ImageArea.setZoom(1);
 	
+	ImageArea.open = false;
+	ImageArea.loaded = true;
+	
+	IMG_NAME = name;
 	document.title = "Photoblob - ["+name+"]";
+	
+	ImageArea.draw(GC(canvas));
+	
+	var img = IMG(src);
+	ImageArea.tempimg = img;
 }
 
 /* Create new image */
@@ -897,11 +1018,12 @@ function NewImage(w, h) {
 	if(isNaN(h)) h = 128;
 	
 	CloseImage();
-	ImageArea.open = true;
+	ImageArea.open = ImageArea.loaded = true;
 	ImageArea.img = ImageData(w, h);
 	IMGFX.SetTarget(ImageData(w, h));
 	IMGFX.AddHistory("New");
-	ImageArea.setZoom(1);
+	ZOOM = 1;
+	IMG_NAME = "newimage.png";
 	document.title = "Photoblob - [newimage.png]";
 }
 
@@ -911,7 +1033,10 @@ function CloseImage() {
 		IMGFX.ClearHistory();
 		delete ImageArea.img;
 		delete IMGFX.target;
-		ImageArea.open = false;
+		EditArea.selecting = false;
+		EditArea.path_last = 0;
+		EditArea.path = [];
+		ImageArea.open = ImageArea.loaded = false;
 		document.title = "Photoblob - A Blobware Project";
 		Update();
 	}
@@ -922,7 +1047,7 @@ function DataURL(img, mimetype) {
 	if(img == null || img.data == null) return;
 	
 	var can = document.createElement("canvas");
-	can.width = img.width;;
+	can.width = img.width;
 	can.height = img.height;
 	GC(can).putImageData(img, 0, 0);
 	return can.toDataURL(mimetype == null ? "image/png" : mimetype);
@@ -1062,7 +1187,7 @@ function InitMenus() {
 					new MenuItem("Gradient Map"/*, IMGFX.GradientMap*/),
 					new MenuItem("Replace Color", PBOX.ReplaceColor, "open"),
 					new MenuItem("Add Noise", PBOX.AddNoise, "open"),
-					new MenuItem("Box Blur", PBOX.BoxBlur, "open"),
+					new MenuItem("Box Blur"/*, PBOX.BoxBlur, "open"*/),
 					new MenuItem("Motion Blur")
 				]));
 				break;

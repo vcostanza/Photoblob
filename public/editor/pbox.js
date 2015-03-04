@@ -179,12 +179,8 @@ PBOX_Resize = PBOX_Base.extend({
 		this.txt = [new TextBox(this, 80, 24, 128, 4, true, 1, 5000), new TextBox(this, 80, 24, 128, 4, true, 1, 5000)];
 		this.lbl = [new Label(80, 24, "Width:"), new Label(80, 24, "Height:")];
 		
-		// Images for button
-		this.img_link = IMG("icons/link.svg");
-		this.img_unlink = IMG("icons/unlink.svg");
-		
 		// Link button
-		this.link = new ImageButton(this.img_link, 30, 30);
+		this.link = new ImageButton("link", 30, 30);
 		this.linked = true;
 		
 		// Image properties
@@ -260,8 +256,8 @@ PBOX_Resize = PBOX_Base.extend({
 		
 		// Link button
 		if(type == "up" && this.link.detect(x, y, type)) {
-			if(this.linked) this.link.img = this.img_unlink;
-			else this.link.img = this.img_link;
+			if(this.linked) this.link.setIcon("unlink");
+			else this.link.setIcon("link");
 			this.linked = !this.linked;
 			Update();
 		}
@@ -315,7 +311,7 @@ PBOX_ColorBox = PBOX_Base.extend({
 			new TextBox(this, 80, 24, "FFFFFF", 6, false)
 		];
 		
-		this.cpick = new ImageButton(Icons["Color Pick"], 25, 25);
+		this.cpick = new ImageButton("colorpick", 25, 25);
 		this.picking = false;
 		
 		this.setChildren(this.cb, this.txt, this.cpick);
@@ -383,7 +379,7 @@ PBOX_ColorBox = PBOX_Base.extend({
 	},
 	detect: function(x, y, type) {
 		
-		var changed = false, c = 0, cx = 0, cy = 0, i = 0;
+		var changed = false, c = 0, coords = [], i = 0;
 		
 		// Color and text boxes
 		for(; i < 4; i++) {
@@ -403,21 +399,21 @@ PBOX_ColorBox = PBOX_Base.extend({
 		if(type == "up") {
 			
 			if(this.cpick.detect(x, y, type)) {
-				SC("crosshair");
 				this.picking = true;
 			} else if(this.picking) {
 				if(ImageArea.open && WB(x, y, ImageArea)) {
-					cx = x-ImageArea.x;
-					cy = y-ImageArea.y;
-					c = IMGFX.SampleColor(cx, cy, 1);
+					coords = ImageArea.getXY(x, y);
+					c = IMGFX.SampleColor(coords[0], coords[1], 1);
 				} else {
-					c = GC(canvas).getImageData(x, y, 1, 1).data;
+					c = [102, 102, 102, 255];
 				}
 				this.setRGBA(c);
 				Update();
 				this.picking = false;
 			}
 		}
+		
+		if(this.picking) SC("crosshair");
 		
 		// Only recalc and update text if something changed
 		if(changed) this.recalc(true);
@@ -657,7 +653,7 @@ PBOX_Brightness = PBOX_Base.extend({
 				this.rb[i].toggle(false);
 				if(this.rb[i].detect(x, y, type)) {
 					this.mode = i;
-					IMGFX.Brightness(Math.round(this.s.value*400), i);
+					IMGFX.Brightness(ROUND(this.s.value*400), i);
 				}
 			}
 			this.rb[this.mode].toggle(true);
@@ -665,7 +661,7 @@ PBOX_Brightness = PBOX_Base.extend({
 		
 		// Slider
 		if(this.s.detect(x, y, type)) {
-			IMGFX.Brightness(Math.round(this.s.value*400), this.mode);
+			IMGFX.Brightness(ROUND(this.s.value*400), this.mode);
 		}
 		
 		this._super(x, y, type);
@@ -685,7 +681,7 @@ PBOX_Brightness = PBOX_Base.extend({
 		
 		ctx.font = "22px "+F1;
 		ctx.fillStyle = C1;
-		ctx.fillText(Math.round(this.s.value*400), this.s.x+this.s.w+10, this.s.y+20, this.s.w);
+		ctx.fillText(ROUND(this.s.value*400), this.s.x+this.s.w+10, this.s.y+20, this.s.w);
 	
 		ctx.restore();
 	}
@@ -709,7 +705,7 @@ PBOX_AddNoise = PBOX_Base.extend({
 		
 		// Slider
 		if(this.s.detect(x, y, type)) {
-			IMGFX.AddNoise(Math.round(this.s.value*200));
+			IMGFX.AddNoise(ROUND(this.s.value*200));
 		}
 		
 		this._super(x, y, type);
@@ -725,7 +721,7 @@ PBOX_AddNoise = PBOX_Base.extend({
 		
 		ctx.font = "22px "+F1;
 		ctx.fillStyle = C1;
-		ctx.fillText(Math.round(this.s.value*200), this.s.x+this.s.w+10, this.s.y+20, this.s.w);
+		ctx.fillText(ROUND(this.s.value*200), this.s.x+this.s.w+10, this.s.y+20, this.s.w);
 	
 		ctx.restore();
 	}
@@ -749,7 +745,7 @@ PBOX_BoxBlur = PBOX_Base.extend({
 		
 		// Slider
 		if(this.s.detect(x, y, type)) {
-			IMGFX.BoxBlur(Math.round(this.s.value*20));
+			IMGFX.BoxBlur(ROUND(this.s.value*20));
 		}
 		
 		this._super(x, y, type);
@@ -765,7 +761,7 @@ PBOX_BoxBlur = PBOX_Base.extend({
 		
 		ctx.font = "22px "+F1;
 		ctx.fillStyle = C1;
-		ctx.fillText(Math.round(this.s.value*20), this.s.x+this.s.w+10, this.s.y+20, this.s.w);
+		ctx.fillText(ROUND(this.s.value*20), this.s.x+this.s.w+10, this.s.y+20, this.s.w);
 	
 		ctx.restore();
 	}
@@ -791,7 +787,10 @@ PBOX_Shift = PBOX_Base.extend({
 	detect: function(x, y, type) {
 	
 		// Slider
-		if(this.sw.detect(x, y, type) || this.sh.detect(x, y, type)) IMGFX.Shift(Math.round(this.sw.value*ImageArea.w), Math.round(this.sh.value*ImageArea.h));
+		if(this.sw.detect(x, y, type) || this.sh.detect(x, y, type)) {
+			var img = IMGFX.GetTarget();
+			IMGFX.Shift(ROUND(this.sw.value*img.w), ROUND(this.sh.value*img.h));
+		}
 		
 		this._super(x, y, type);
 		
@@ -805,10 +804,12 @@ PBOX_Shift = PBOX_Base.extend({
 		// Drawing begins here
 		this._super(ctx);
 		
+		var img = IMGFX.GetTarget();
+		
 		ctx.font = "22px "+F1;
 		ctx.fillStyle = C1;
-		ctx.fillText(Math.round(this.sw.value*ImageArea.w), this.sw.x+this.sw.w+10, this.sw.y+20, this.sw.w);
-		ctx.fillText(Math.round(this.sh.value*ImageArea.h), this.sh.x+this.sh.w+10, this.sh.y+20, this.sh.w);
+		ctx.fillText(ROUND(this.sw.value*img.w), this.sw.x+this.sw.w+10, this.sw.y+20, this.sw.w);
+		ctx.fillText(ROUND(this.sh.value*img.h), this.sh.x+this.sh.w+10, this.sh.y+20, this.sh.w);
 	
 		ctx.restore();
 	}
@@ -852,9 +853,9 @@ PBOX_ChangeHSL = PBOX_Base.extend({
 		
 		ctx.font = "22px "+F1;
 		ctx.fillStyle = C1;
-		ctx.fillText(Math.round(this.sh.value*100)-50, this.sh.x+this.sh.w+10, this.sh.y+20, this.sh.w);
-		ctx.fillText(Math.round(this.ss.value*200)-100, this.ss.x+this.ss.w+10, this.ss.y+20, this.ss.w);
-		ctx.fillText(Math.round(this.sl.value*200)-100, this.sl.x+this.sl.w+10, this.sl.y+20, this.sl.w);
+		ctx.fillText(ROUND(this.sh.value*100)-50, this.sh.x+this.sh.w+10, this.sh.y+20, this.sh.w);
+		ctx.fillText(ROUND(this.ss.value*200)-100, this.ss.x+this.ss.w+10, this.ss.y+20, this.ss.w);
+		ctx.fillText(ROUND(this.sl.value*200)-100, this.sl.x+this.sl.w+10, this.sl.y+20, this.sl.w);
 	
 		ctx.restore();
 	}
@@ -879,7 +880,7 @@ PBOX_ReplaceColor = PBOX_Base.extend({
 		IMGFX.AddHistory("Replace Color");
 	},
 	refresh: function() {
-		IMGFX.ReplaceColor(this.col_a.getColor(), this.col_b.getColor(), Math.round(this.st.value*300));
+		IMGFX.ReplaceColor(this.col_a.getColor(), this.col_b.getColor(), ROUND(this.st.value*300));
 	},
 	detect: function(x, y, type) {
 		
@@ -912,7 +913,7 @@ PBOX_ReplaceColor = PBOX_Base.extend({
 		ctx.fillStyle = C1;
 		ctx.fillText("Replace", this.x+20, this.y+46, w1);
 		ctx.fillText("with", this.x+w1+this.col_a.w+40, this.y+46, w2);
-		ctx.fillText(Math.round(this.st.value*300), this.st.x+this.st.w+10, this.st.y+20, this.w-this.st.w-30);
+		ctx.fillText(ROUND(this.st.value*300), this.st.x+this.st.w+10, this.st.y+20, this.w-this.st.w-30);
 		
 		ctx.font = "14px "+F1;
 		ctx.fillText("Amount", this.x+20, this.st.y-10, this.w);
@@ -1040,15 +1041,15 @@ PBOX_View3D = PBOX_Base.extend({
 		if(rx-6 < 0) {
 			rw += rx-6;
 			rx = 6;
-		} else if(rx+rw-6 > canvas.width) {
-			rw += canvas.width-(rx+rw-6);
+		} else if(rx+rw-6 > CWIDTH) {
+			rw += CWIDTH-(rx+rw-6);
 		}
 		
 		if(ry-6 < 0) {
 			rh += ry-6;
 			ry = 6;
-		} else if(ry+rh-6 > canvas.height) {
-			rh += canvas.height-(ry+rh-6);
+		} else if(ry+rh-6 > CHEIGHT) {
+			rh += CHEIGHT-(ry+rh-6);
 		}
 		
 		r.setSize(rw, rh);
@@ -1239,7 +1240,7 @@ PBOX_ImageBrowser = PBOX_Base.extend({
 				ctx.fillStyle = C1;
 				l = ctx.measureText(img.t.toUpperCase()).width;
 				ctx.fillText(img.t.toUpperCase(), x+190-l, y+190, 100);
-				ctx.fillText(img.s >= 1000 ? (img.s >= 1000000 ? Math.round((img.s/1000000)*10)/10 + " MB" : Math.round((img.s/1000)*10)/10 + " KB") : img.s+" bytes", x+10, y+190, 190);
+				ctx.fillText(ByteString(img.s), x+10, y+190, 190);
 			}
 			ctx.fillStyle = BG7, ctx.lineWidth = 2, ctx.strokeRect(x, y, 200, 200);
 		}
@@ -1553,10 +1554,10 @@ PBOX = {
 			if(typeof(t) == "object" && t.draw != undefined && t.active == true) {
 			
 				// Reset window position when off screen
-				if(!t.isDragging && (t.x <= 0 || t.x >= canvas.width || t.y <= 0 || t.y >= canvas.height))
+				if(!t.isDragging && (t.x <= 0 || t.x >= CWIDTH || t.y <= 0 || t.y >= CHEIGHT))
 				{
-					t.x = (canvas.width-t.w)/2;
-					t.y = (canvas.height-t.h)/3;
+					t.x = (CWIDTH-t.w)/2;
+					t.y = (CHEIGHT-t.h)/3;
 				}
 				
 				// Fading effects
@@ -1570,7 +1571,7 @@ PBOX = {
 							continue;
 						}
 					} else {
-						var o = Math.sin((time/200)*(Math.PI/2));	// Sine fading always looks nicer than lerp
+						var o = SIN((time/200)*(PI/2));	// Sine fading always looks nicer than lerp
 						ctx.globalAlpha = t.closing ? 1-o : o;
 						Update();
 					}

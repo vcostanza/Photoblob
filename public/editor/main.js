@@ -227,7 +227,10 @@ ImageButton = Button.extend({
 	init: function(img, w, h) {
 		this._super("");
 		this.size(w, h);
-		this.img = img;
+		this.setIcon(img);
+	},
+	setIcon: function(img) {
+		this.ic = Icons.getXY(img);
 	},
 	draw: function(ctx) {
 		
@@ -238,7 +241,7 @@ ImageButton = Button.extend({
 		
 		ctx.lineWidth = 4;
 		if(this.active) ctx.strokeStyle = BG6; else ctx.strokeStyle = BG5;
-		if(this.img && this.img.complete) ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
+		if(IC_SMALL.complete) ctx.drawImage(IC_SMALL, this.ic[0], this.ic[1], 64, 64, this.x, this.y, this.w, this.h);
 	}
 });
 
@@ -324,10 +327,10 @@ Slider = Box.extend({
 			this.value = Clamp((x-this.x)/(this.w), 0, 1);
 		}
 		
-		var changed = this.value != this.oldvalue;
+		var changed = (type == "up" || this.value != this.oldvalue);
 		this.oldvalue = this.value;
 		if(changed) Update();
-		return changed;
+		return changed && type != "move";
 	},
 	draw: function(ctx) {
 	
@@ -480,7 +483,7 @@ HyperLink = Label.extend({
 		
 		if(this.active) {	
 			// Open href in new tab
-			if(type == "up") {
+			if(type == "click") {
 				window.open(this.href, "_blank");
 				window.focus();
 			} else if(type == "move") {
@@ -601,12 +604,44 @@ ColorBox = Box.extend({
 	}
 });
 
+
+/* Icon offsets */
+Icons = {
+		
+	// Return icon sprite offset
+	getXY: function(name) {
+		
+		if(!IC_SMALL.complete) return;
+		
+		var x = 0, y = 1;
+		
+		switch(name) {
+			case "brush": x = 1; break;
+			case "colorpick": x = 2; break;
+			case "erase": x = 3; break;
+			case "boxselect": x = 4; break;
+			case "fill": x = 5; break;
+			case "grab": x = 6; break;
+			case "pen": x = 7; break;
+			case "pencil": x = 8; break;
+			case "text": x = 9; break;
+			case "uvedit": x = 10; break;
+			case "link": y = 0; break;
+			case "unlink": x = 1, y = 0; break;
+		}
+		
+		return [x*66, y*68];
+	},
+};
+
+/******** MAIN PANELS **********/
+
 /* Background */
 BG = {
 	draw: function(ctx) {
 		ctx.fillStyle = BG2;
 		
-		var e = EditArea, w = canvas.width, h = canvas.height;
+		var e = EditArea, w = CWIDTH, h = CHEIGHT;
 		
 		ctx.fillRect(0, 0, w, e.y);			// Menu bar	background
 		ctx.fillRect(0, e.y, e.x, h);		// Tool box background
@@ -616,10 +651,21 @@ BG = {
 
 /* Frame drawer */
 FrameNum = {
-	draw: function(ctx) {		
+	draw: function(ctx, drawTime) {
+		
+		// Calculate total image byte size
+		var byteSize = 0, i = 0;
+		if(IMGFX.history) {
+			for(; i < IMGFX.history.length; i++) {
+				byteSize += IMGFX.history[i].img.data.byteLength;
+			}
+		}
+		if(ImageArea.img) byteSize += ImageArea.img.data.byteLength;
+		
+		var txt = FLOOR(drawTime)+"ms | "+ByteString(byteSize)+" | "+Frame;
 		ctx.font = "18px "+F1;
 		ctx.fillStyle = C1;
-		ctx.fillText("F: "+Frame, canvas.width-ctx.measureText("F: "+Frame).width-10, 23);
+		ctx.fillText(txt, CWIDTH-ctx.measureText(txt).width-10, 23);
 	}
 };
 
@@ -661,7 +707,7 @@ Tooltip = {
 			
 			ctx.font = (h-12)+"px "+F1;
 			
-			var w = ctx.measureText(this.text).width+8, x = this.x-(w/2), y = this.y-(h/2);
+			var w = ctx.measureText(this.text).width+8, x = Clamp(this.x-(w/2), 0, CWIDTH-w), y = Clamp(this.y-(h/2), 0, CHEIGHT-h);
 			
 			ctx.fillStyle = BG2;
 			ctx.fillRect(x, y, w, h);
@@ -686,6 +732,8 @@ EditArea = {
 	h: 0,
 	
 	// Specific vars
+	lastX: 0,
+	lastY: 0,
 	selectArea: {x: 0, y: 0, x2: 0, y2: 0},
 	grabX: 0,
 	grabY: 0,
@@ -694,15 +742,25 @@ EditArea = {
 	toggle: false,
 	selecting: false,
 	
+	/* TOOLBOX IMPLEMENTATION */
 	detect: function(x, y, type) {
 	
+		// Get active tool
 		var tool = ToolBox.get();
 	
+		// Check that there is an active tool
 		if(!tool || !WB(x, y, this) || PBOX.open)
 			return;
 			
-		var icoords = ImageArea.getXY(x, y), ix = icoords[0], iy = icoords[1];
+		// Get image coordinates
+		var icoords = ImageArea.getXY(x, y), ix = icoords[0], iy = icoords[1], iw = IMGFX.tw, ih = IMGFX.th, lx = this.lastX, ly = this.lastY, changed = !(lx == ix && ly == iy);
+		
+		if(type == "move") {
+			this.lastX = ix;
+			this.lastY = iy;
+		}
 	
+		/* Box selection tool */
 		if(tool == "Box Select" && ImageArea.open) {
 			
 			// Clear existing pen path
@@ -719,8 +777,6 @@ EditArea = {
 				// Selection complete
 				if(type == "up") {
 					
-					var iw = IMGFX.tw, ih = IMGFX.th;
-					
 					x = Clamp(ix, 0, iw);
 					y = Clamp(iy, 0, ih);
 					s.x = Clamp(s.x, 0, iw);
@@ -730,27 +786,35 @@ EditArea = {
 					
 					IMGFX.SEL_SetBox(new Selection(sx, sy, ABS(s.x-x), ABS(s.y-y)));
 					this.selecting = false;
+					Update();
 					
 				// Adjusting selection
 				} else if(type == "move") {
 					s.x2 = ix;
 					s.y2 = iy;
+					if(changed) Update();
 				}
-				Update();
 			} else if(type == "down") {
-				s.x = ix;
-				s.y = iy;
+				s.x = s.x2 = ix;
+				s.y = s.x2 = iy;
 				this.selecting = true;
 			}
 			SC("crosshair");
+			
+		/* UV editing mode */
+		} else if(tool == "UV Edit") {
+			
+			
+			
+		/* Color picker tool */
 		} else if(tool == "Color Pick") {
 			SC("crosshair");
-			if(type == "move") {
+			if(type == "move" && changed) {
 				var ctx = GC(canvas), d = [];
 				if(WB(x, y, ImageArea)) {
 					d = IMGFX.SampleColor(ix, iy, 1);
 				} else {
-					d = ctx.getImageData(x, y, 1, 1).data;
+					d = [102, 102, 102, 255];
 				}
 				MainColors.setFG(d);
 				MainColors.drawInside(ctx);
@@ -758,32 +822,73 @@ EditArea = {
 				ToolBox.clear();
 				Update();
 			}
+		
+		/* Brush and pencil */
 		} else if(tool == "Brush" || tool == "Erase" || tool == "Pencil") {
-			if(!WB(x, y, ImageArea)) return;
 			
-			var bd = ToolBox.getData();
+			SC("crosshair");
 			
-			if(MDOWN) {				
-				if(tool == "Pencil")
-					IMGFX.ApplyPencil(ix, iy, MainColors.fg, CTRL);
-				else
-					IMGFX.ApplyBrush(ix, iy, MainColors.fg, bd.brush[0].imgdata, tool == "Erase");
-				Update();
+			/*if(Brushes.cursor) {
+				Brushes.x = x;
+				Brushes.y = y;
+				if(type == "move") Update();
+			}*/
+			
+			if(!WB(x, y, ImageArea) || (type != "down" && type != "up" && type != "move")) return;
+			
+			if(MDOWN && (type == "down" || type == "move" && changed)) {
+				
+				var bd = ToolBox.getData(), toolType = (tool == "Brush" ? 1 : (tool == "Erase" ? 2 : 3)), bdata = (bd ? bd.imgdata : null),
+				
+					// Mouse move interpolation
+					buf = (type == "move" ? Lerp2D(ix, iy, lx, ly) : [ix, iy]), i = 0, lastCoords = [0, 0], stepSize = 1;
+				
+				// Calculate brush step size
+				if(bdata) stepSize = CEIL(HYP(bdata.width/8, bdata.height/8));
+				
+				for(; i < buf.length; i += 2) {
+					
+					// Don't apply to the same pixel more than once
+					if(buf[i] >= 0 && buf[i] < iw && buf[i+1] >= 0 && buf[i+1] < ih && (i == 0 || !(lastCoords[0] == buf[i] && lastCoords[1] == buf[i+1]))) {
+						
+						// Apply pencil every step
+						if(toolType == 3) {
+							IMGFX.ApplyPencil(buf[i], buf[i+1], MainColors.fg, CTRL);
+							lastCoords[0] = buf[i];
+							lastCoords[1] = buf[i+1];
+							
+						// Only apply brush every 'stepSize' # of pixels
+						} else if(ABS(buf[i]-lastCoords[0]) >= stepSize || ABS(buf[i+1]-lastCoords[1]) >= stepSize) {
+							IMGFX.ApplyBrush(buf[i], buf[i+1], MainColors.fg, bdata, toolType == 2);
+							lastCoords[0] = buf[i];
+							lastCoords[1] = buf[i+1];
+						}
+					}
+				}
+				
+				// TODO: Get rid of this image update call once a brush overlay scheme is implemented for nice performance increase
+				ImageArea.update();
+				// Basically: Create an overlay canvas that only handles real-time brush drawing
+				// so I don't need to update the canvas and the image area every time
+				
 			} else {
 				if(type == "up") {
-					IMGFX.AddHistory(ToolBox.active.name);
-					Update();
+					IMGFX.AddHistory(tool);
+					ImageArea.update();
 				}
 			}
 			
+		/* Fill tool */
 		} else if(tool == "Fill") {
 			if(WB(x, y, ImageArea)) {
 				SC("crosshair");
 				if(type == "up") {
-					IMGFX.Fill(ix, iy, MainColors.fg, 20);
-					Update();
+					IMGFX.Fill(ix, iy, MainColors.fg, 30);
+					IMGFX.AddHistory(tool);
 				}
 			}
+			
+		/* Pen tool (sort of) */
 		} else if(tool == "Pen" && ImageArea.open) {
 			var p = this.path, i = this.path_last*2;
 			
@@ -802,12 +907,14 @@ EditArea = {
 					this.path_last = 0;
 					this.path = [];
 				}
-			} else if(type == "move") {
+			} else if(type == "move" && changed) {
 				p[i] = ix;
 				p[i+1] = iy;
 				if(i > 0) Update();
 			}
 			SC("crosshair");
+			
+		/* Grab tool */
 		}/* else if(tool == "Grab" && ImageArea.open) {
 			SC("grab");
 			
@@ -824,11 +931,11 @@ EditArea = {
 	},
 	
 	draw: function(ctx) {
-		this.w = Clamp(canvas.width-this.x-200, 0, canvas.width);
-		this.h = canvas.height-this.y;
+		this.w = Clamp(CWIDTH-this.x-200, 0, CWIDTH);
+		this.h = CHEIGHT-this.y;
 		
 		ctx.fillStyle = GRY;
-		ctx.fillRect(0, 0, canvas.width, canvas.height);
+		ctx.fillRect(0, 0, CWIDTH, CHEIGHT);
 	}
 };
 
@@ -843,7 +950,8 @@ ImageArea = {
 	sy: 0,		// Image drawing offset y
 	off_x: 0,	// Grab offset x
 	off_y: 0,	// Grab offset y
-	open: false,
+	loaded: false,	// Image area loading/loaded (set to true when image is first opened)
+	open: false,	// Image area open (set to true when image is opened and finished loading)
 	tempimg: null,
 	img: null,
 	
@@ -865,11 +973,13 @@ ImageArea = {
 	},
 	
 	// Set zoom value
-	setZoom: function(value) {		
+	setZoom: function(value) {
 		if(value == "in")
 			value = ZOOM + (ZOOM >= 1 ? (ZOOM >= 4 ? 1 : 0.5) : 0.1);
 		else if(value == "out")
 			value = ZOOM - (ZOOM > 1 ? (ZOOM >= 4 ? 1 : 0.5) : 0.1);
+		else if(value == "fit")
+			value = GetScaleToFit(IMGFX.tw, IMGFX.th, EditArea.w, EditArea.h);
 		
 		value = Clamp(value, 0.05, 16);
 		
@@ -881,7 +991,7 @@ ImageArea = {
 	
 	// Update image area render
 	update: function() {
-		if(!this.img) return;
+		if(!this.img || IMGFX.speedTesting) return;
 		
 		/* This code is a mess - do something! */
 		
@@ -903,21 +1013,39 @@ ImageArea = {
 		Update();
 	},
 	draw: function(ctx) {
-		if(!this.open) return;
+		if(!this.loaded) return;
+		
+		var e = EditArea;
 		
 		// Wait for image load then store its data
 		if(!this.img) {
-		
-			if(!this.tempimg.loaded) return;
 			
+			// Draw loading text
+			ctx.font = "24px "+F1;
+			
+			var fw = e.w/2, fh = FLOOR(24*(fw/ctx.measureText("Loading "+IMG_NAME).width));
+			if(fw > 0 && fh > 0) {
+				ctx.font = fh+"px "+F1;
+				ctx.fillStyle = rgba(0, 0, 0, 64);
+				ctx.fillText("Loading "+IMG_NAME, e.x+(e.w/4), e.y+((e.h-fh)/2)+fh, fw);
+			}
+		
+			if(!(this.tempimg && this.tempimg.loaded)) return;
+			
+			this.open = true;
 			this.img = LoadImageData(this.tempimg);
 			delete this.tempimg;
 			
 			IMGFX.SetTarget(CloneImg(this.img));
 			IMGFX.AddHistory("Open");
+			if(this.img.width > e.w || this.img.height > e.h) {
+				this.setZoom("fit");
+				return;
+			}
+			ZOOM = 1;
 		}
 		
-		var e = EditArea, w = IMGFX.tw*ZOOM, h = IMGFX.th*ZOOM, iw = this.w = this.img.width, ih = this.h = this.img.height, iw2 = (iw/2), ih2 = (ih/2), x = FLOOR((e.w-w)/2+e.x)+this.off_x, y = FLOOR((e.h-h)/2+e.y)+this.off_y;
+		var w = IMGFX.tw*ZOOM, h = IMGFX.th*ZOOM, iw = this.w = this.img.width, ih = this.h = this.img.height, iw2 = (iw/2), ih2 = (ih/2), x = FLOOR((e.w-w)/2+e.x)+this.off_x, y = FLOOR((e.h-h)/2+e.y)+this.off_y;
 		
 		this.x = Clamp(x, e.x, e.x+e.w-iw);
 		this.y = Clamp(y, e.y, e.y+e.h-ih);
@@ -942,9 +1070,11 @@ ImageArea = {
 		
 		// Draw temp path
 		var p = e.path, i = 0;
-		ctx.strokeStyle = BLK;
 		for(; i < p.length-2; i+=2) {
+			ctx.strokeStyle = BLK;
 			DrawLine(ctx, x+(p[i]*ZOOM), y+(p[i+1]*ZOOM), x+(p[i+2]*ZOOM), y+(p[i+3]*ZOOM));
+			ctx.strokeStyle = WHT;
+			DrawLine(ctx, x+(p[i]*ZOOM)+1, y+(p[i+1]*ZOOM)+1, x+(p[i+2]*ZOOM)+1, y+(p[i+3]*ZOOM)+1);
 		}
 	}
 };
@@ -997,6 +1127,12 @@ UVMap = {
 			Update();
 		}
 	},
+	selectNone: function() {
+		if(this.UVs) {
+			this.selectedUVs.fill(0);
+			Update();
+		}
+	},
 	detect: function(x, y, type) {
 		
 		if(!this.UVs || !WB(x, y, EditArea)) return;
@@ -1011,7 +1147,7 @@ UVMap = {
 			if(!SHIFT) su.fill(0);
 			for(; i < this.UVxy.length; i += 2) {
 				
-				rad = SQRT(POW(this.UVxy[i]-x, 2)+POW(this.UVxy[i+1]-y, 2));
+				rad = HYP(this.UVxy[i]-x, this.UVxy[i+1]-y);
 				
 				if(rad <= min) {
 					if(rad < min) {
@@ -1204,7 +1340,7 @@ MenuBar = {
 	draw: function(ctx) {
 		ctx.save();
 		
-		this.w = canvas.width-this.x;
+		this.w = CWIDTH-this.x;
 		ctx.fillStyle = BG4;
 		RoundRect(ctx, this.x, this.y, this.w, this.h, 10, true, false, true);
 		
@@ -1231,8 +1367,8 @@ ToolBox = {
 	
 	// The box of tools
 	tools: [new Tool("Move"), new Tool("Box Select", true), new Tool("Lasso"), new Tool("Color Select"),
-	new Tool("Crop"), new Tool("Color Pick", true), new Tool("Healing Brush"), new Tool("Brush", true),
-	new Tool("Stamp"), new Tool("Pencil", true), new Tool("Erase", true), new Tool("Fill"),
+	new Tool("UV Edit", true), new Tool("Color Pick", true), new Tool("Healing Brush"), new Tool("Brush", true),
+	new Tool("Stamp"), new Tool("Pencil", true), new Tool("Erase", true), new Tool("Fill", true),
 	new Tool("Sharpen"), new Tool("Burn"), new Tool("Pen", true), new Tool("Text"),
 	new Tool("Select"), new Tool("Line"), new Tool("Grab"), new Tool("Zoom")],
 	
@@ -1240,10 +1376,13 @@ ToolBox = {
 	active: null,
 	
 	clear: function() {
+		Brushes.x = Brushes.y = 0;
+		Brushes.cursor = null;
 		this.active = null;
+		Update();
 	},
 	
-	// Return true if tool is active
+	// Return active tool name
 	get: function() {
 		return (this.active != null ? this.active.name : null);
 	},
@@ -1292,9 +1431,11 @@ ToolBox = {
 	setTool: function(t) {
 		if(this.active != t) {
 			if(t.name == "Brush" || t.name == "Erase") {
-				t.data = {brush: [Brushes.get(1, 50), Brushes.get(0, 50), Brushes.get(2, 50)]};
+				t.data = Brushes.get(1, 50);
 			}
 			this.active = t;
+		} else {
+			this.clear();
 		}
 	},
 	
@@ -1306,7 +1447,7 @@ ToolBox = {
 	draw: function(ctx) {
 		ctx.save();
 		
-		this.h = canvas.height-this.y;
+		this.h = CHEIGHT-this.y;
 		ctx.fillStyle = BG4;
 		RoundRect(ctx, this.x, this.y, this.w, this.h, 10, true, false, true);
 		
@@ -1328,22 +1469,21 @@ function Tool(name, active) {
 	this.w = 30,
 	this.h = 30,
 	this.active = active,	// Active in this case means it has functionality
-	this.data = [],
+	this.data = null,
 	this.set = function(x, y) {
 		this.x = x;
 		this.y = y;
 	},
 	this.loadIcon = function() {
-		if(!Icons[this.name]) Icons[this.name] = IMG("icons/"+this.name.toLowerCase().replace(" ", "")+".svg");
-		return Icons[this.name];
+		return (!this.active ? [0, 68] : Icons.getXY(this.name.toLowerCase().replace(" ", "")));
 	},
 	this.icon = this.loadIcon(),
 	this.draw = function(ctx) {
 		
-		this.active && ToolBox.highlight == this ? ctx.fillStyle = BG6 : ctx.fillStyle = BG5;
+		ctx.fillStyle = (this.active && ToolBox.highlight == this ? BG6 : (ToolBox.active == this ? BG7 : BG5));
 		ctx.fillRect(this.x, this.y, this.w, this.h);
-		if(this.icon && this.icon.loaded) {			
-			ctx.drawImage(this.active ? this.icon : ERROR_IMG, this.x+3, this.y+3, this.w-6, this.h-6);
+		if(this.icon) {
+			if(IC_SMALL.complete) ctx.drawImage(IC_SMALL, this.icon[0], this.icon[1], 64, 64, this.x+3, this.y+3, this.w-6, this.h-6);
 		}
 	};
 }
@@ -1519,8 +1659,8 @@ HistoryBox = {
 		ctx.save();
 		
 		this.x = EditArea.x+EditArea.w+10;
-		this.w = Clamp(canvas.width-this.x, 0, 190);
-		this.h = (canvas.height-this.y)/2;
+		this.w = Clamp(CWIDTH-this.x, 0, 190);
+		this.h = (CHEIGHT-this.y)/2;
 		
 		ctx.fillStyle = BG4;
 		RoundRect(ctx, this.x, this.y, this.w, this.h, 10, true, false, true);
@@ -1557,8 +1697,8 @@ LayersBox = {
 		
 		this.x = EditArea.x+EditArea.w+10;
 		this.y = HistoryBox.y+HistoryBox.h+5;
-		this.w = Clamp(canvas.width-this.x, 0, 190);
-		this.h = canvas.height-this.y;
+		this.w = Clamp(CWIDTH-this.x, 0, 190);
+		this.h = CHEIGHT-this.y;
 		
 		ctx.fillStyle = BG4;
 		RoundRect(ctx, this.x, this.y, this.w, this.h, 10, true, false, true);
@@ -1581,6 +1721,12 @@ Brushes = {
 	// The base brush images
 	imgs: [IMG("brushes/1.svg"), IMG("brushes/2.svg"), IMG("brushes/delaware.svg")],
 	
+	// Cursor container
+	x: 0,
+	y: 0,
+	s: 0,
+	cursor: null,
+	
 	// Returns the image data of a brush size 's'
 	get: function(index, s) {
 		
@@ -1588,13 +1734,19 @@ Brushes = {
 		
 		if(brush && brush.loaded) {
 			
-			var imgcan = document.createElement("canvas");
+			// Get brush image data at size 's'
+			var imgcan = document.createElement("canvas"), c = GC(imgcan);
 			imgcan.width = imgcan.height = s;
-			
-			var c = GC(imgcan);
 			c.drawImage(brush, 0, 0, s, s);
 			
 			return {imgdata: c.getImageData(0, 0, s, s), index: index};
+		}
+	},
+	
+	draw: function(ctx) {
+		if(this.cursor) {
+			var size = this.s*ZOOM
+			ctx.drawImage(this.cursor, CEIL(this.x-(size/2)), CEIL(this.y-(size/2)), size, size);
 		}
 	}
 }
@@ -1614,14 +1766,15 @@ function DrawEditor() {
 	}
 	Frame++;
 	
-	var ctx = GC(canvas);
+	var ctx = GC(canvas), t = T();
 	
-	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	ctx.clearRect(0, 0, CWIDTH, CHEIGHT);
 	
 	// This is the proper rendering order
 	// Screwing with this may draw things wrong
 	EditArea.draw(ctx);
 	ImageArea.draw(ctx);
+	Brushes.draw(ctx);
 	UVMap.draw(ctx);
 	BG.draw(ctx);
 	ToolBox.draw(ctx);
@@ -1632,7 +1785,7 @@ function DrawEditor() {
 	Tooltip.draw(ctx);
 	
 	// DEBUG: draw this on top of everything
-	if(LOCAL) FrameNum.draw(ctx);
+	if(LOCAL) FrameNum.draw(ctx, T()-t);
 	
 	requestAnimationFrame(DrawEditor);
 	

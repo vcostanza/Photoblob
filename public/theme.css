@@ -1,13 +1,11 @@
 @font-face {
 	font-family: 'Purisa';
-	src: url('fonts/Purisa.woff') format('woff'), /* Chrome 6+, Firefox 3.6+, IE 9+, Safari 5.1+ */
-		url('fonts/Purisa.ttf') format('truetype'); /* Chrome 4+, Firefox 3.5, Opera 10+, Safari 3—5 */
+	src: url('fonts/Purisa.woff') format('woff'), url('fonts/Purisa.ttf') format('truetype');
 }
 
 @font-face {
 	font-family: 'WhimsyTT';
-	src: url('fonts/WhimsyTT.woff') format('woff'), /* Chrome 6+, Firefox 3.6+, IE 9+, Safari 5.1+ */
-		url('fonts/WhimsyTT.ttf') format('truetype'); /* Chrome 4+, Firefox 3.5, Opera 10+, Safari 3—5 */
+	src: url('fonts/WhimsyTT.woff') format('woff'), url('fonts/WhimsyTT.ttf') format('truetype');
 }
 
 body {
