@@ -116,8 +116,10 @@ Menu = Box.extend({
 		
 		var w = 0, i = 0;
 	
+		ctx.font = "14px "+F1;
+	
 		for(; i < opt.length; i++) {
-			w = ctx.measureText(opt[i].name).width+10;
+			w = ctx.measureText(opt[i].name).width+30;
 			if(w > this.w)
 				this.w = w;
 		}
@@ -129,8 +131,6 @@ Menu = Box.extend({
 			ctx.fillStyle = BG5;
 			ctx.fillRect(this.x, this.y+(this.highlight*20)+3, this.w, 20);
 		}
-		
-		ctx.font = "14px "+F1;
 		
 		for(i = 0; i < opt.length; i++) {
 			if(opt[i].empty) ctx.fillStyle = GRY; else ctx.fillStyle = C2;
@@ -169,21 +169,25 @@ MenuItem = Class.extend({
 
 /* Button */
 Button = Box.extend({
-	init: function(text) {
+	init: function(text, h) {
 		this._super();
+		
+		if(!h) h = 26;
+		
+		this.h = h;
 		this.setText(text);
 		this.state = 0;
 		this.active = true;
 	},
 	setText: function(text) {
 		var c = GC(canvas);
-		c.font = "18px "+F1;
-		this.size(c.measureText(text).width+10, 26);
+		c.font = (this.h-8)+"px "+F1;
+		this.size(c.measureText(text).width+10, this.h);
 		this.text = text;
 	},
 	detect: function(x, y, type) {
 		if(this.active && WB(x, y, this)) {
-			if(type == "up") {
+			if(type == "click") {
 				this.state = 0;
 				Update();
 				return true;
@@ -206,7 +210,7 @@ Button = Box.extend({
 	},
 	draw: function(ctx) {
 		
-		ctx.font = "18px "+F1;
+		ctx.font = (this.h-8)+"px "+F1;
 		
 		if(this.state == 1 && this.active) ctx.fillStyle = BG6;
 		else if(this.state == 2) ctx.fillStyle = BG4;
@@ -218,7 +222,7 @@ Button = Box.extend({
 		
 		if(this.active) ctx.fillStyle = C1;
 		else ctx.fillStyle = C3;
-		ctx.fillText(this.text, this.x+5, this.y+20, this.w-5);
+		ctx.fillText(this.text, this.x+5, this.y+(this.h-4), this.w-5);
 	}
 });
 
@@ -364,7 +368,7 @@ TextBox = Box.extend({
 		if(this.numOnly) {
 			var v = this.value, num = v;
 			
-			if(v == "") num = 0;
+			if(v == "") num = this.min;
 			else if(v == "-") num = -1;
 			else num = parseInt(num);
 			
@@ -377,7 +381,7 @@ TextBox = Box.extend({
 	},
 	unfocus: function() {
 		if(this == FocusObj) {
-			if(this.numOnly && this.get(true) == "") this.value = 0;// Set empty number-only text fields to zero
+			if(this.numOnly && this.get(true) == "") this.value = this.min;	// Set empty number-only text fields to minimum
 			FocusObj = null;
 			Update();
 		}
@@ -437,7 +441,7 @@ TextBox = Box.extend({
 		c.fillRect(this.x, this.y, this.w, this.h);
 		
 		// Text
-		c.fillStyle = C1, c.font = (this.h-4)+"px "+F1;
+		c.fillStyle = C1, c.font = (this.h-6)+"px "+F1;
 		c.fillText(this.value, this.x+4, this.y+this.h-4, this.w-8);
 		
 		// Selection bar thing
@@ -646,6 +650,7 @@ BG = {
 		ctx.fillRect(0, 0, w, e.y);			// Menu bar	background
 		ctx.fillRect(0, e.y, e.x, h);		// Tool box background
 		ctx.fillRect(e.x+e.w, e.y, w, h);	// Menu bar	background
+		ctx.fillRect(e.x, e.y+e.h, w, 32);
 	}
 };
 
@@ -724,10 +729,61 @@ Tooltip = {
 	}
 };
 
+/* The status bar at the bottom of the screen */
+StatusBar = {
+	x: 0,
+	y: 0,
+	w: 0,
+	h: 30,
+	zoomBox: new TextBox(null, 60, 22, 100, 4, true, 0, 1600),
+	
+	detect: function(x, y, type) {
+		this.zoomBox.detect(x, y, type);
+		this.zoomBox.onchange = function(o, n) {
+			ImageArea.setZoom(n/100);
+		};
+	},
+	
+	draw: function(ctx) {
+		this.w = EditArea.w;
+		this.x = EditArea.x;
+		this.y = EditArea.y+EditArea.h+2;
+		
+		ctx.fillStyle = BG4;
+		ctx.fillRect(this.x, this.y, this.w, this.h);
+		
+		// Show zoom
+		var z = this.zoomBox;
+		z.value = ROUND(ZOOM*100);
+		z.set(this.x+this.w-z.w-4, this.y+4);
+		z.draw(ctx);
+		
+		// Show active tool
+		if(ToolBox.get() != null) {
+			ctx.font = "18px "+F1;
+			ctx.fillStyle = C1;
+			ctx.fillText(ToolBox.get(), this.x+4, this.y+22, this.w/8);
+		}
+		
+		// Show image properties
+		if(IMG_NAME) {
+			ctx.font = "14px "+F1;
+			var imgStr = IMG_NAME+" ["+IMGFX.tw+"x"+IMGFX.th+"]"+(IMG_SIZE > 0 ? " "+ByteString(IMG_SIZE) : ""),
+				fw = this.w-(this.w/8)-z.w-32,
+				tx = this.x+(this.w/8)+16,
+				tw = ctx.measureText(imgStr).width;
+			ctx.fillStyle = BG4C;
+			ctx.fillRect(tx, this.y, fw, this.h);
+			ctx.fillStyle = C1;
+			ctx.fillText(imgStr, Clamp(tx+((fw-tw)/2), tx, this.w), this.y+22, fw);
+		}
+	}
+};
+
 /* The editing area */
 EditArea = {
-	x: 85,
-	y: 40,
+	x: 80,
+	y: 35,
 	w: 0,
 	h: 0,
 	
@@ -741,6 +797,12 @@ EditArea = {
 	path_last: 0,
 	toggle: false,
 	selecting: false,
+	
+	clear: function() {
+		this.selecting = false;
+		this.path_last = 0;
+		this.path = [];
+	},
 	
 	/* TOOLBOX IMPLEMENTATION */
 	detect: function(x, y, type) {
@@ -804,7 +866,7 @@ EditArea = {
 		/* UV editing mode */
 		} else if(tool == "UV Edit") {
 			
-			
+			UVMap.detect(x, y, type);
 			
 		/* Color picker tool */
 		} else if(tool == "Color Pick") {
@@ -932,7 +994,7 @@ EditArea = {
 	
 	draw: function(ctx) {
 		this.w = Clamp(CWIDTH-this.x-200, 0, CWIDTH);
-		this.h = CHEIGHT-this.y;
+		this.h = CHEIGHT-this.y-32;
 		
 		ctx.fillStyle = GRY;
 		ctx.fillRect(0, 0, CWIDTH, CHEIGHT);
@@ -1085,10 +1147,10 @@ UVMap = {
 	y: 0,
 	w: 0,
 	h: 0,
-	UVs: null,			// Array of all UVs
+	geo: null,		// Reference geometry
+	UVs: null,		// Array of all UVs
 	UVxy: null,		// Array of UV coordinates
 	selectedUVs: null,	// Array of selected UV indices
-	//UVdots: null,		// Array of positions to draw selection squares (saves drawing time)
 	
 	dumpUVs: function(g) {
 		if(g && g.faceVertexUvs) {
@@ -1102,14 +1164,19 @@ UVMap = {
 				for(j = 0; j < fvu[i].length; j++) {
 					// Vertices
 					for(k = 0; k < 3; k++) {
-						this.UVs.push(fvu[i][j][k].x, fvu[i][j][k].y);
+						this.UVs.push(fvu[i][j][k].x, 1-fvu[i][j][k].y);
 					}
 				}
 			}
 			
+			this.geo = g;
+			
 			// Setup xy coordinate and selection arrays
 			this.UVxy = new Uint16Array(this.UVs.length);
 			this.selectedUVs = new Uint8ClampedArray(this.UVs.length/2);
+			
+			// Set UV editing on
+			if(ToolBox.get() != "UV Edit") ToolBox.setTool("UV Edit");
 			
 			Update();
 		}
@@ -1118,12 +1185,11 @@ UVMap = {
 		delete this.UVs;
 		delete this.UVxy;
 		delete this.selectedUVs;
-		//delete this.UVdots;
+		if(ToolBox.get() == "UV Edit") ToolBox.clear();
 	},
 	selectAll: function() {
 		if(this.UVs) {
 			this.selectedUVs.fill(1);
-			//this.plotDots();
 			Update();
 		}
 	},
@@ -1133,14 +1199,74 @@ UVMap = {
 			Update();
 		}
 	},
+	
+	// Detect specific vars
+	downX: 0,
+	downY: 0,
+	lastUVs: null,
+	
 	detect: function(x, y, type) {
 		
 		if(!this.UVs || !WB(x, y, EditArea)) return;
 		
-		if(type == "up") {
+		var i = 0;
+		
+		// Move UVs
+		if(RCLICK) {
+			
+			// Save original mouse and UV positions
+			if(type == "down") {
+				downX = x;
+				downY = y;
+				
+				if(!this.lastUVs || this.lastUVs.length != this.UVs.length)
+					this.lastUVs = new Float32Array(this.UVs.length);
+				for(; i < this.UVs.length; i++) {
+					this.lastUVs[i] = this.UVs[i];
+				}
+				
+			// Apply UV movement
+			} else {
+			
+				var e = EditArea, su = this.selectedUVs, vw = FLOOR(IMGFX.tw*ZOOM), vh = FLOOR(IMGFX.th*ZOOM), vx = FLOOR((e.w-vw)/2+e.x), vy = FLOOR((e.h-vh)/2+e.y), j = 0, s = false;
+				
+				for(i = 0; i < su.length; i++) {
+					if(su[i] == 1) {
+						this.UVs[j] = this.lastUVs[j]+((x-downX)/vw);
+						this.UVs[j+1] = this.lastUVs[j+1]+((y-downY)/vh);
+						s = true;
+					}
+					j += 2;
+				}
+				
+				// Update model UVs
+				if(type == "up") {
+					if(this.geo) {
+						var fvu = this.geo.faceVertexUvs, k = 0, v = 0;
+						
+						for(i = 0; i < fvu.length; i++) {
+							for(j = 0; j < fvu[i].length; j++) {
+								for(k = 0; k < 3; k++) {
+									fvu[i][j][k].x = this.UVs[v];
+									fvu[i][j][k].y = 1-this.UVs[v+1];
+									v += 2;
+								}
+							}
+						}
+						
+						this.geo.uvsNeedUpdate = true;
+						Update();
+					}
+				}
+				
+				if(s) Update();
+			}
+		
+		// Single UV select
+		} else if(LCLICK && type == "up") {
 			
 			// Only select a UV within 'min' radius
-			var min = 10*ZOOM, i = 0, rad, su = this.selectedUVs, sel = [];
+			var min = 10*ZOOM, rad, su = this.selectedUVs, sel = [];
 			
 			//this.UVdots = [];
 			
@@ -1233,7 +1359,7 @@ MenuBar = {
 	
 	// Menu items
 	items: [new MenuBarItem("File"), new MenuBarItem("Edit"), new MenuBarItem("Image"), new MenuBarItem("Layer"),
-	new MenuBarItem("Select"), new MenuBarItem("Filter"), new MenuBarItem("View"), new MenuBarItem("Window"), new MenuBarItem("Help")],
+	new MenuBarItem("Select"), new MenuBarItem("Filter"), new MenuBarItem("View"), new MenuBarItem("Settings"), new MenuBarItem("Help")],
 	
 	// HIT DETECTION
 	detect: function(x, y, type) {
@@ -1361,7 +1487,7 @@ MenuBar = {
 /* ToolBox */
 ToolBox = {
 	x: 0,
-	y: 40,
+	y: 35,
 	w: 75,
 	h: 0,
 	
@@ -1385,6 +1511,45 @@ ToolBox = {
 	// Return active tool name
 	get: function() {
 		return (this.active != null ? this.active.name : null);
+	},
+	
+	// Highlight used for mouse hover
+	setHighlight: function(h) {
+		if(h != null && !h.active) return;
+		if(this.highlight != h) {
+			this.highlight = h;
+			Update();
+		}
+	},
+	
+	// Set the active tool
+	setTool: function(t) {
+		
+		// Convert tool name to object
+		if(typeof(t) == "string") {
+			for(var i in this.tools) {
+				if(this.tools[i].name == t) {
+					t = this.tools[i];
+					break;
+				}
+			}
+			if(typeof(t) == "string") t = null;
+		}
+		
+		if(t && this.active != t) {
+			if(t.name == "Brush" || t.name == "Erase") {
+				t.data = Brushes.get(1, 50);
+			}
+			this.active = t;
+			Update();
+		} else {
+			this.clear();
+		}
+	},
+	
+	// Get tool data
+	getData: function() {
+		return this.active.data;
 	},
 	
 	// Hit detection
@@ -1416,32 +1581,6 @@ ToolBox = {
 		
 		MainColors.detect(x, y, type);
 		
-	},
-	
-	// Highlight used for mouse hover
-	setHighlight: function(h) {
-		if(h != null && !h.active) return;
-		if(this.highlight != h) {
-			this.highlight = h;
-			Update();
-		}
-	},
-	
-	// Set the active tool
-	setTool: function(t) {
-		if(this.active != t) {
-			if(t.name == "Brush" || t.name == "Erase") {
-				t.data = Brushes.get(1, 50);
-			}
-			this.active = t;
-		} else {
-			this.clear();
-		}
-	},
-	
-	// Get tool data
-	getData: function() {
-		return this.active.data;
 	},
 	
 	draw: function(ctx) {
@@ -1480,7 +1619,7 @@ function Tool(name, active) {
 	this.icon = this.loadIcon(),
 	this.draw = function(ctx) {
 		
-		ctx.fillStyle = (this.active && ToolBox.highlight == this ? BG6 : (ToolBox.active == this ? BG7 : BG5));
+		ctx.fillStyle = (ToolBox.active == this ? BG2 : (this.active && ToolBox.highlight == this ? BG6 : BG5));
 		ctx.fillRect(this.x, this.y, this.w, this.h);
 		if(this.icon) {
 			if(IC_SMALL.complete) ctx.drawImage(IC_SMALL, this.icon[0], this.icon[1], 64, 64, this.x+3, this.y+3, this.w-6, this.h-6);
@@ -1623,7 +1762,7 @@ MainColors = {
 /* History */
 HistoryBox = {
 	x: 0,
-	y: 40,
+	y: 35,
 	w: 0,
 	h: 0,
 	ih: 30,
@@ -1658,8 +1797,8 @@ HistoryBox = {
 	draw: function(ctx) {
 		ctx.save();
 		
-		this.x = EditArea.x+EditArea.w+10;
-		this.w = Clamp(CWIDTH-this.x, 0, 190);
+		this.x = EditArea.x+EditArea.w+5;
+		this.w = Clamp(CWIDTH-this.x, 0, 195);
 		this.h = (CHEIGHT-this.y)/2;
 		
 		ctx.fillStyle = BG4;
@@ -1695,9 +1834,9 @@ LayersBox = {
 	draw: function(ctx) {
 		ctx.save();
 		
-		this.x = EditArea.x+EditArea.w+10;
+		this.x = EditArea.x+EditArea.w+5;
 		this.y = HistoryBox.y+HistoryBox.h+5;
-		this.w = Clamp(CWIDTH-this.x, 0, 190);
+		this.w = Clamp(CWIDTH-this.x, 0, 195);
 		this.h = CHEIGHT-this.y;
 		
 		ctx.fillStyle = BG4;
@@ -1774,9 +1913,9 @@ function DrawEditor() {
 	// Screwing with this may draw things wrong
 	EditArea.draw(ctx);
 	ImageArea.draw(ctx);
-	Brushes.draw(ctx);
 	UVMap.draw(ctx);
 	BG.draw(ctx);
+	StatusBar.draw(ctx);
 	ToolBox.draw(ctx);
 	HistoryBox.draw(ctx);
 	LayersBox.draw(ctx);

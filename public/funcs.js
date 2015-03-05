@@ -34,6 +34,7 @@ Frame = 0;
 FocusObj = null;
 ZOOM = 1;
 IMG_NAME = null;
+IMG_SIZE = 0;
 ImageArea = null;
 
 /* Icon sprite sheet */
@@ -42,7 +43,7 @@ ERROR_IMG = null;
 IC_SMALL = null;
 
 /* Basic input */
-CTRL = SHIFT = ALT = MDOWN = LCLICK = RCLICK = false;
+CTRL = SHIFT = ALT = MDOWN = LCLICK = RCLICK = MIDCLICK = false;
 
 // Fullscreen state
 InFullscreen = false;
@@ -315,7 +316,9 @@ function ReadFiles(e) {
 	
 	if(!e) return;
 	
-	var reader = new FileReader(), form = new FormData(), f = null, i = 0;
+	var reader = new FileReader(), form = new FormData(), f = null, type = e.target.uploadType, i = 0;
+	
+	if(type == null) type = 0;
 	
 	if(e.dataTransfer) f = e.dataTransfer.files;
 	else f = e.target.files;
@@ -324,15 +327,27 @@ function ReadFiles(e) {
 	
 	// Load base64 image
 	reader.onload = function(e) {
-		OpenImage(e.target.result, e.target.fileName);
+		if(type == 0) {
+			OpenImage(e.target.result, e.target.fileName);
+			IMG_SIZE = e.target.size;
+		} else if(type == 1) {
+			PBOX.View3D.setModel(e.target.result);
+		}
 	}
 	
 	// Read form data
 	for(; i < f.length; i++) {
-		if(f[i].type.match(/image.*/)) {
+		
+		// Images
+		if(type == 0 && f[i].type.match(/image.*/)) {
 			//form.append('uploads', f[i], f[i].name);
+			reader.size = f[i].size;
 			reader.fileName = f[i].name;
 			reader.readAsDataURL(f[i]);
+			
+		// JSON
+		} else if(type == 1 && f[i].type.match(/application.java/)) {
+			reader.readAsText(f[i]);
 		}
 	}
 	
@@ -470,7 +485,7 @@ function MouseDetect(event) {
 		y = FLOOR(event.clientY-t.getBoundingClientRect().top),
 		
 		// Type (without "mouse" before it)
-		type = (event.type.indexOf("Scroll") > -1 ? "wheel" : (event.type == "contextmenu" ? "rclick" : event.type.replace("mouse", "")));
+		type = (event.type.indexOf("Scroll") > -1 ? "wheel" :  event.type.replace("mouse", ""));
 	
 	// Used for interpolating movement
 	if(type == "move") {
@@ -481,24 +496,28 @@ function MouseDetect(event) {
 	MouseY = y;
 	
 	// Stop click events here, passing them to the detections is redudant
-	if(type == "rclick") {
+	if(type == "contextmenu") {
 		event.preventDefault();
 		event.stopPropagation();
-		RCLICK = true;
 		return;
 	} else if(type == "click") {
 		if(CTRL && ALT) {
 			OpenDialog();
 			CTRL = ALT = false;
 		}
-		LCLICK = true;
 		// I would return here since "up" and "click" are almost interchangable
 		// But I need to send click for "protected" events like window.open (used in HyperLink)
 	}
 	
-	// Mouse down toggle
-	if(type == "down") MDOWN = true;
-	else if(type == "up") MDOWN = RCLICK = LCLICK = false;
+	// Mouse down
+	if(type == "down") {
+		MDOWN = true;
+		switch(event.button) {
+			case 0: LCLICK = true; break;
+			case 1: MIDCLICK = true; break;
+			case 2: RCLICK = true; break;
+		}
+	} else if(type == "up") MDOWN = false;
 	
 	// Unfocus from text box
 	if(MDOWN && FocusObj) {
@@ -526,7 +545,16 @@ function MouseDetect(event) {
 			ToolBox.detect(x, y, type);
 			HistoryBox.detect(x, y, type);
 			EditArea.detect(x, y, type);
-			UVMap.detect(x, y, type);
+			StatusBar.detect(x, y, type);
+		}
+	}
+	
+	// Mouse up
+	if(type == "up") {
+		switch(event.button) {
+			case 0: LCLICK = false; break;
+			case 1: MIDCLICK = false; break;
+			case 2: RCLICK = false; break;
 		}
 	}
 	
@@ -538,10 +566,12 @@ function MouseDetect(event) {
 
 /* Detect keyboard events */
 function Hotkeys(event) {
-	var ct = CTRL = event.ctrlKey, k = event.key ? event.key.toLowerCase() : String.fromCharCode(event.charCode+(ct?96:0)).toLowerCase(), sh = SHIFT = event.shiftKey, alt = ALT = event.altKey, hk = false;
+	var ct = CTRL = event.ctrlKey, k = event.key ? event.key : String.fromCharCode(event.keyCode), sh = SHIFT = event.shiftKey, alt = ALT = event.altKey, hk = false;
+	
+	CL(event.keyCode, k);
 	
 	// Non-alphanumeric keys (legacy only)
-	if(event.key == null && event.charCode == 0) {
+	if(event.key == null && k == "") {
 		
 		var kc = event.keyCode;
 	
@@ -582,7 +612,7 @@ function Hotkeys(event) {
 	if(k == "control" || k == "shift" || k == "alt") k = "";
 	
 	// Set up hotkey string for reading
-	var hkStr = (ct?"ctrl+":"") + (alt?"alt+":"") + (sh?"shift+":"") + k;
+	var hkStr = (ct?"ctrl+":"") + (alt?"alt+":"") + (sh?"shift+":"") + k.toLowerCase();
 	
 	// Read hotkey input
 	if(LockKeyboard) {
@@ -622,7 +652,7 @@ function TypeDetect(event, k) {
 	
 	var f = FocusObj, v = f.get(true), oldval = v;
 	
-	switch(k) {
+	switch(k.toLowerCase()) {
 		
 		// Delete next char
 		case "del":
@@ -702,7 +732,7 @@ function TypeDetect(event, k) {
 	f.value = v;
 	
 	// Fire change event
-	if(oldval != v) f.onchange(oldval, v);
+	if(oldval != v) f.onchange(oldval, f.get());
 	
 	Update();
 	
@@ -984,14 +1014,26 @@ function IMG(src) {
 	return i;
 }
 
+/* Set image name */
+function SetImageName(name) {
+	IMG_NAME = name;
+	document.title = "Photoblob - ["+name+"]";
+}
+
 /* Show the open dialog */
-function OpenDialog() {
+// type		0 for image, 1 for JSON
+function OpenDialog(type) {
+	
+	// Create upload dialog if it doesn't exist
 	if(FileDialog == undefined) {
 		FileDialog = document.createElement("input");
 		FileDialog.type = "file";
 		FileDialog.multiple = false;
 		FileDialog.addEventListener("change", ReadFiles);
 	}
+	
+	if(type == null) type = 0;	
+	FileDialog.uploadType = type;
 	FileDialog.click();
 }
 
@@ -1002,8 +1044,7 @@ function OpenImage(src, name) {
 	ImageArea.open = false;
 	ImageArea.loaded = true;
 	
-	IMG_NAME = name;
-	document.title = "Photoblob - ["+name+"]";
+	SetImageName(name);
 	
 	ImageArea.draw(GC(canvas));
 	
@@ -1023,8 +1064,7 @@ function NewImage(w, h) {
 	IMGFX.SetTarget(ImageData(w, h));
 	IMGFX.AddHistory("New");
 	ZOOM = 1;
-	IMG_NAME = "newimage.png";
-	document.title = "Photoblob - [newimage.png]";
+	SetImageName("NewImage.png");
 }
 
 /* Close image in editor */
@@ -1033,11 +1073,11 @@ function CloseImage() {
 		IMGFX.ClearHistory();
 		delete ImageArea.img;
 		delete IMGFX.target;
-		EditArea.selecting = false;
-		EditArea.path_last = 0;
-		EditArea.path = [];
+		EditArea.clear();
 		ImageArea.open = ImageArea.loaded = false;
 		document.title = "Photoblob - A Blobware Project";
+		IMG_NAME = null;
+		IMG_SIZE = 0;
 		Update();
 	}
 }
@@ -1067,63 +1107,14 @@ function LoadImageData(img) {
 }
 
 /* Save image data */
-function ExportImage() {
-
-	var img = IMGFX.target, eimg = E("e-img"), econt = E("export-img"), emsg = E("e-msg"), eload = E("e-load"), elink = E("e-link");
-	if(!img || !eimg || !econt) return;
+/* Must be called during a click (detect) event */
+function ExportImage(name, mimetype) {
 	
-	var w = img.width, h = img.height, cW = window.innerWidth, cH = window.innerHeight,
-	imgcan = document.createElement("canvas"), eper = GetScaleToFit(w, h, cW/2, cH/2), iX, iY;
+	var img = DataURL(IMGFX.target, mimetype), xport = E("export");
 	
-	CFS();
-	
-	// Show everything so we can measure them
-	D(econt, true);
-	D(emsg, true);
-	D(eload, true);
-
-	// Expand container to whole screen
-	econt.style.width = cW+"px";
-	econt.style.height = cH+"px";
-	
-	// Convert canvas to image
-	imgcan.width = w;
-	imgcan.height = h;
-	GC(imgcan).putImageData(img, 0, 0);
-	
-	// Preview image
-	eimg.src = imgcan.toDataURL(document.title.indexOf(".jpg]") > -1 || document.title.indexOf(".jpeg]") > -1 ? "image/jpeg" : "image/png", 1.0);
-	eimg.width = eper*w;
-	eimg.height = eper*h;
-	
-	// Download link
-	elink.href = eimg.src;
-	elink.setAttribute("download", eimg.src);
-	
-	// Center image	
-	iX = (cW/2)-(eimg.width/2), iY = (cH/2)-(eimg.height/2);
-	eimg.style.left = iX+"px";
-	eimg.style.top = iY+"px";
-	
-	// Center text messages
-	emsg.style.left = (cW/2)-(emsg.clientWidth/2)+"px";
-	emsg.style.top = iY+eimg.height+10+"px";
-	eload.style.left = (cW/2)-(eload.clientWidth/2)+"px";
-	eload.style.top = emsg.style.top;
-	
-	// Hide message and wait for load
-	D(emsg, false);
-	
-	eimg.onload = function() {		
-		D(emsg, true);
-
-		D(eload, false);
-	}
-	
-	eimg.onerror = function() {
-		eload.innerHTML = "Failed to load!";
-	}
-	
+	xport.href = img;
+	xport.download = (name == null ? IMG_NAME : name);
+	xport.click();
 }
 
 /* Close the image export thing */
@@ -1141,7 +1132,7 @@ function InitMenus() {
 					new MenuItem("Open", function() {
 						OpenDialog();
 					}),
-					new MenuItem("Save", ExportImage),
+					new MenuItem("Save", PBOX.Save, "open"),
 					new MenuItem("Close", CloseImage)
 				]));
 				break;
@@ -1154,8 +1145,6 @@ function InitMenus() {
 				break;
 			case "Image":
 				MenuBar.items[m].setMenu(new Menu([
-					new MenuItem("Brightness", PBOX.Brightness, "open"),
-					new MenuItem("Auto Contrast", function(){IMGFX.AutoContrast(); IMGFX.AddHistory("Auto Contrast");}),
 					new MenuItem("Rotate", IMGFX.Rotate),
 					new MenuItem("Mirror", PBOX.Mirror, "open"),
 					new MenuItem("Shift", PBOX.Shift, "open"),
@@ -1181,6 +1170,8 @@ function InitMenus() {
 				break;
 			case "Filter":
 				MenuBar.items[m].setMenu(new Menu([
+					new MenuItem("Brightness", PBOX.Brightness, "open"),
+					new MenuItem("Auto Contrast", function(){IMGFX.AutoContrast(); IMGFX.AddHistory("Auto Contrast");}),
 					new MenuItem("Grayscale", PBOX.Grayscale, "open"),
 					new MenuItem("Invert Colors", PBOX.InvertColors, "open"),
 					new MenuItem("Change HSL", PBOX.ChangeHSL, "open"),
@@ -1200,7 +1191,7 @@ function InitMenus() {
 					new MenuItem("Fullscreen", TFS)
 				]));
 				break;
-			case "Window":
+			case "Settings":
 				MenuBar.items[m].setMenu(new Menu([
 					new MenuItem("Hotkeys", PBOX.Hotkeys, "open"),
 					new MenuItem("Themes", PBOX.ChooseTheme, "open")

@@ -87,12 +87,7 @@ function HK_Rotate() {
 }
 
 function HK_SaveImage() {
-	ExportImage();
-}
-
-function HK_AutoContrast() {
-	IMGFX.AutoContrast();
-	IMGFX.AddHistory("Auto Contrast");
+	PBOX.Save.open();
 }
 
 function HK_InvertColors() {
@@ -141,7 +136,6 @@ HK = {
 		Redo: new Hotkey(HK_Redo, "Redo", "Redo a change; step forward in history."),
 		Restore: new Hotkey(HK_Restore, "Restore", "Restore the image to its original state."),
 		Rotate: new Hotkey(HK_Rotate, "Rotate Image", "Rotate the image 90 degrees clockwise."),
-		AutoContrast: new Hotkey(HK_AutoContrast, "Auto Contrast", "Automatic contrast and color adjustment."),
 		InvertColors: new Hotkey(HK_InvertColors, "Invert Colors", "Invert the RGB colors of the image."),
 		View3D: new Hotkey(HK_View3D, "3D View", "Open the 3D View window."),
 		ZoomIn: new Hotkey(HK_ZoomIn, "Zoom In", "Zoom into the image 10% more."),
