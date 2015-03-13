@@ -59,7 +59,7 @@ THREE_MSG = false;
 NODE_SERVER = "";
 
 // Is this being hosted locally?
-LOCAL = (window.location.host == "" || window.location.host == "localhost");
+LOCAL = (window.location.host == "" || window.location.host.indexOf("localhost:") == 0);
 
 // Math function aliases
 ABS = Math.abs, MAX = Math.max, MIN = Math.min, CEIL = Math.ceil, FLOOR = Math.floor, ROUND = Math.round, RND = Math.random, POW = Math.pow, SQRT = Math.sqrt, PI = Math.PI, COS = Math.cos, SIN = Math.sin, HYP = Math.hypot;
@@ -220,6 +220,33 @@ function Lerp2D(x1, y1, x2, y2) {
 	return buf;
 }
 
+/* Return multiplier required to scale w, h to mw, mh */
+function GetScaleToFit(w, h, mw, mh) {
+	return mw/w < mh/h ? mw/w : mh/h;
+}
+
+/* Convert mime to type extension */
+function MimeToExt(mime) {
+	switch(mime) {
+		case "image/png": return "png";
+		case "image/jpg":
+		case "image/jpeg": return "jpg";
+		case "image/gif": return "gif";
+		case "image/tiff": return "tiff";
+		case "image/x-icon": return "ico";
+		case "image/svg+xml": return "svg";
+		case "image/webp": return "webp";
+		case "image/xxx": return "xxx";
+	}
+	return "img";
+}
+
+/* Get mime type from base64 data */
+function GetBase64Mime(data) {
+	if(!data || data.indexOf("data:") != 0) return "image/png";
+	return data.substring(5, data.indexOf(";base64"));
+}
+
 /* Convert bytes to KB, MB, etc. */
 function ByteString(b) {
 	return b >= 1000 ? (b >= 1000000 ? ROUND((b/1000000)*10)/10 + " MB" : ROUND((b/1000)*10)/10 + " KB") : b+" B"
@@ -274,14 +301,12 @@ function RecurCall(obj, func) {
 
 /* Adjust canvas size to style size */
 function FixCanvasSize() {
-
 	if(canvas.width != canvas.clientWidth || canvas.height != canvas.clientHeight) {
 		CWIDTH = canvas.width = canvas.clientWidth;
 		CHEIGHT = canvas.height = canvas.clientHeight;
 		if(ImageArea) ImageArea.update();
 		Update();
-	}
-	
+	}	
 }
 
 /* Load multiple scripts asynchronously one after another */
@@ -566,16 +591,12 @@ function MouseDetect(event) {
 
 /* Detect keyboard events */
 function Hotkeys(event) {
-	var ct = CTRL = event.ctrlKey, k = event.key ? event.key : String.fromCharCode(event.keyCode), sh = SHIFT = event.shiftKey, alt = ALT = event.altKey, hk = false;
+	var ct = CTRL = event.ctrlKey, k = event.key, sh = SHIFT = event.shiftKey, alt = ALT = event.altKey, hk = false;
 	
-	CL(event.keyCode, k);
-	
-	// Non-alphanumeric keys (legacy only)
-	if(event.key == null && k == "") {
+	// Legacy
+	if(k == null) {
 		
 		var kc = event.keyCode;
-	
-		k = null;
 		
 		if(kc >= 112 && kc <= 123) {
 			k = "f"+(kc-111);
@@ -604,12 +625,17 @@ function Hotkeys(event) {
 			case 92: k = "os"; break;
 			case 144: k = "numlock"; break;
 			case 145: k = "scrolllock"; break;
+			case 187: k = "="; break;
+			case 189: k = "-"; break;
+			default:
+				k = String.fromCharCode(event.keyCode);
+				k = (sh?k.toUpperCase():k.toLowerCase());
+				break;
 		}
-		//if(k != null) CL(k); else CL(event.keyCode);
 	}
 	
 	// Hide modifier keys
-	if(k == "control" || k == "shift" || k == "alt") k = "";
+	if(k == "Control" || k == "Shift" || k == "Alt") k = "";
 	
 	// Set up hotkey string for reading
 	var hkStr = (ct?"ctrl+":"") + (alt?"alt+":"") + (sh?"shift+":"") + k.toLowerCase();
@@ -645,10 +671,32 @@ function Hotkeys(event) {
 	}
 }
 
+/* Set the input object */
+function SetInputFocus(obj) {
+	FocusObj = obj;
+	
+	var input = E("text-input");
+	if(obj == null) {
+		input.value = "";
+		input.blur();
+	} else {
+		input.value = obj.get(true);
+		input.setSelectionRange(obj.ind, obj.ind);
+		input.setAttribute("size", obj.maxlen);
+		input.focus();
+	}
+}
+
 /* Detect regular typing */
 function TypeDetect(event, k) {
 	
 	if(!FocusObj) return;
+	
+	// Disable annoying Firefox quick find
+	if(k == "/") {
+		event.preventDefault();
+		event.stopPropagation();
+	}
 	
 	var f = FocusObj, v = f.get(true), oldval = v;
 	
@@ -708,7 +756,8 @@ function TypeDetect(event, k) {
 			// Set sibling as new focus
 			if(next > -1) {
 				f.unfocus();
-				f = FocusObj = c[next];
+				f = c[next];
+				SetInputFocus(f);
 				oldval = v = f.get(true);
 			}
 			
@@ -871,12 +920,14 @@ function RGB2HSL(r, g, b) {
 
 /* HSL to RGB Written by Mohsen */
 
+SIXTH = 1/6, THIRD = 1/3, HALF = 1/2, TWOTHIRD = 2/3;
+
 function h2r(p, q, t) {
 	if(t < 0) t += 1;
 	if(t > 1) t -= 1;
-	if(t < 1/6) return p + (q - p) * 6 * t;
-	if(t < 1/2) return q;
-	if(t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+	if(t < SIXTH) return p + (q - p) * 6 * t;
+	if(t < HALF) return q;
+	if(t < TWOTHIRD) return p + (q - p) * (TWOTHIRD - t) * 6;
 	return p;
 }
 
@@ -888,9 +939,9 @@ function HSL2RGB(h, s, l) {
 	} else {
 		var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
 		var p = 2 * l - q;
-		r = h2r(p, q, h + 1/3);
+		r = h2r(p, q, h + THIRD);
 		g = h2r(p, q, h);
-		b = h2r(p, q, h - 1/3);
+		b = h2r(p, q, h - THIRD);
 	}
 
 	return [CEIL(r * 255), CEIL(g * 255), CEIL(b * 255)];
@@ -954,9 +1005,9 @@ function ShiftHSL(r, g, b, hf, sf, lf) {
 	} else {
 		var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
 		var p = 2 * l - q;
-		r = h2r(p, q, h + 1/3);
+		r = h2r(p, q, h + THIRD);
 		g = h2r(p, q, h);
-		b = h2r(p, q, h - 1/3);
+		b = h2r(p, q, h - THIRD);
 	}
 	
 	return [CEIL(r * 255), CEIL(g * 255), CEIL(b * 255)];
@@ -974,11 +1025,6 @@ function Selection(x, y, w, h) {
 	this.y = y;
 	this.w = w;
 	this.h = h;
-}
-
-/* Return multiplier required to scale w, h to mw, mh */
-function GetScaleToFit(w, h, mw, mh) {
-	return mw/w < mh/h ? mw/w : mh/h;
 }
 
 /* Clone image data */
@@ -1038,18 +1084,83 @@ function OpenDialog(type) {
 }
 
 /* Open image in editor */
-function OpenImage(src, name) {
+function OpenImage(src, name, skipSVG) {
 	CloseImage();
 	
-	ImageArea.open = false;
+	// Special open for SVGs
+	if(!skipSVG && GetBase64Mime(src) == "image/svg+xml") {
+		var svg = IMG(src);
+		svg.onload = function() {
+			PBOX.OpenSVG.open(svg, name);
+		};
+		return;
+	}
+	
+	// Ready to load
 	ImageArea.loaded = true;
 	
+	// Image name displayed in status bar and title bar
 	SetImageName(name);
 	
+	// Draw loading text before next update
 	ImageArea.draw(GC(canvas));
 	
+	// Assign image to load
 	var img = IMG(src);
 	ImageArea.tempimg = img;
+}
+
+/* Open image from online link */
+function OpenImageLink(src) {
+	
+	if(!src || src.length < 3) return;
+	
+	var xhr = new XMLHttpRequest();
+	xhr.open('POST', NODE_SERVER+'/openlink', true);
+	
+	// Returns the base64 of the image or an array of images if an HTML page was specified
+	xhr.onload = function() {
+		var res = xhr.response;
+		
+		// Image data returned
+		if(res.indexOf("data:image/") == 0) OpenImage(res, src.substring(src.lastIndexOf("/")+1));
+		
+		// Array returned
+		else if(res.indexOf("IMAGES: ") == 0) {
+			res = JSON.parse(res.substring(res.indexOf("IMAGES: ")+8));
+			
+			var i = 0, j = 0, add2Browser = function(e) {
+				// Check that it's available
+				if(!(e.target.width == 0 && e.target.height == 0 || !e.target.valid)) {				
+					var img = e.target, src = img.src, w = img.width, h = img.height, mult = GetScaleToFit(w, h, 200, 200);
+					img.loaded = true;
+					img.width = FLOOR(w*mult);
+					img.height = FLOOR(h*mult);
+					PBOX.ImageBrowser.images.push({
+						d: img,
+						t: (src.indexOf("data:") == 0 ? MimeToExt(GetBase64Mime(src)) :
+							src.substring(src.lastIndexOf(".")+1, (src.lastIndexOf("?") > src.lastIndexOf(".") ? src.lastIndexOf("?") : src.length))),
+						s: img.width*img.height*4,
+						w: w,
+						h: h
+					});
+				}
+				j++;
+				if(j >= res.length) PBOX.ImageBrowser.open();
+			}
+			
+			// Close and clear image browser
+			PBOX.ImageBrowser.close();
+			PBOX.ImageBrowser.images = [];
+			
+			for(; i < res.length; i++) {
+				IMG(res[i]).onload = add2Browser;
+			}
+		}
+	};
+	
+	xhr.setRequestHeader("Content-type", "application/json; charset=UTF-8");
+	xhr.send(JSON.stringify({link: src}));
 }
 
 /* Create new image */
@@ -1132,6 +1243,7 @@ function InitMenus() {
 					new MenuItem("Open", function() {
 						OpenDialog();
 					}),
+					new MenuItem("Open Link", PBOX.OpenLink, "open"),
 					new MenuItem("Save", PBOX.Save, "open"),
 					new MenuItem("Close", CloseImage)
 				]));
@@ -1178,6 +1290,7 @@ function InitMenus() {
 					new MenuItem("Gradient Map"/*, IMGFX.GradientMap*/),
 					new MenuItem("Replace Color", PBOX.ReplaceColor, "open"),
 					new MenuItem("Add Noise", PBOX.AddNoise, "open"),
+					new MenuItem("Posterize", PBOX.Posterize, "open"),
 					new MenuItem("Box Blur"/*, PBOX.BoxBlur, "open"*/),
 					new MenuItem("Motion Blur")
 				]));
@@ -1219,7 +1332,7 @@ function SetTheme(num) {
 
 	switch(num) {
 		
-		// Default timid blue
+		// Timid blue
 		case 0: BG1 = "#112", BG2 = "#223", BG3 = "#334", BG4 = "#445",
 		BG4C = "#4C4C5D", BG5 = "#556", BG6 = "#667", BG7 = "#778"; break;
 		
@@ -1317,8 +1430,20 @@ function SetTheme(num) {
 	Update();
 }
 
-document.addEventListener("DOMContentLoaded", StartEditor, false);
+// Load texture list
+function TextureList() {
+	var xhr = new XMLHttpRequest();
+	xhr.open('POST', NODE_SERVER+'/textures', true);
+	
+	// A list of texture thumbnails and info
+	xhr.onload = function() {
+		CL(xhr.response);
+	};
+	
+	xhr.send(null);
+}
 
+// Get initial window snapshot
 function CloneWindow() {	
 	WinClone = [];
 	for(var i in window) {
@@ -1326,6 +1451,7 @@ function CloneWindow() {
 	}
 }
 
+// Check window snapshot for changes (should be none)
 function CheckWindow() {
 	var hit, diff = [];
 	for(var i in window) {
@@ -1337,3 +1463,6 @@ function CheckWindow() {
 	}
 	console.dir(diff);
 }
+
+// Start here
+document.addEventListener("DOMContentLoaded", StartEditor, false);

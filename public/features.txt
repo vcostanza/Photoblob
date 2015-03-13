@@ -1,0 +1,241 @@
+///// PHOTOBLOB COMPLETE FEATURE LIST ver. 0.1.9 \\\\\
+
+FILE MENU:
+	New: Create a new image by specifying a width and height (in pixels)
+		- Newly created image is empty and transparent
+	
+	Open: Brings up the file upload dialog
+		- Supported file types include JPG, PNG, GIF, BMP, WEBP, and SVG
+		- SVGs have a special open dialog with control over rasterized width and height 
+		- HOTKEY: ctrl+alt+click
+		
+	Open Link: Allows opening an online image or page of images
+		- Only works with Node server activated
+		- Opening a page will bring up the Image Browser containing all images found on that page
+	
+	Save: Save/download the loaded image
+		- Supports JPEG and PNG
+		- HOTKEY: ctrl+s
+		
+	Close: Closes the loaded image
+		- HOTKEY: ctrl+w
+	
+EDIT MENU:
+	Undo: Revert the image to a former state in History
+		- HOTKEY: ctrl+z
+		
+	Redo: Revert the image to a later state in History
+		- HOTKEY: ctrl+shift+z
+		
+	Restore: Revert the image to when it was first opened
+		- HOTKEY: ctrl+shift+r
+		
+IMAGE MENU:
+	Rotate: Rotate the image 90 degrees clock-wise
+		- HOTKEY: ctrl+r
+	
+	Mirror: Mirror the image horizontally and/or vertically
+		- Selections supported
+	
+	Shift: Horizontally and vertically wrap the image by a specified X and Y
+		- Starts at half the image width and height by default
+		- Selections supported
+		
+	Resize: Resize the image to a specified width and height (in pixels or percentage)
+		- Clicking the link icon on the right toggles width/height lock
+		- Preview box toggles real-time image resizing
+		- Percentage box toggles between percentage and pixels
+		- Uses interpolated gaps algorithm
+		
+	Crop: Crop the image based on the active selection
+		- If no selection exists the "Box Select" tool is activated
+		- Works best with rectangular selections
+		
+LAYER MENU:
+	Layers not implemented yet!
+	
+SELECT MENU:
+	Select All: Creates a selection around the entire image
+		- HOTKEY: ctrl+a
+		
+	Select None: Removes any active selection
+		- HOTKEY: ctrl+shift+a
+		
+	Select Inverse: Inverts the active selection
+		- If used when the active selection takes up the entire image, the selection is cleared
+		- HOTKEY: ctrl+shift+i
+		
+FILTERS MENU:
+	Brightness: Change the brightness of the image using normal, additive, or glow mode
+		- Normal mode: Darken decreases contrast, lighten increases contrast
+		- Additive mode: Darken increases contrast, lighten decreases contrast
+		- Glow mode: Midtones change more, highlights and shadows change less
+		- Selections supported
+		
+	Auto Contrast: "Stretch" the tonal range of the image so it reaches pure black and pure white
+		- Will only affect images that don't have any pure black/white pixels
+		- Alters color
+		- Selections supported
+	
+	Grayscale: Convert the image to grayscale using several different modes
+		- Average: Average of color channels
+		- Darken/Lighten: Darkest/lightest color channel
+		- Desaturate: Average of min and max color channels
+		- Red/Green/Blue Channel: Set to specific color channel
+		- Luma: Based on luma coefficients (see http://en.wikipedia.org/wiki/Luma_%28video%29)
+		- Selections supported
+	
+	Invert Colors: Invert the red, green, and/or blue color channels
+		- Inverts all 3 channels by default
+		- Selections supported
+		- HOTKEY: ctrl+i
+	
+	Change HSL: Shift the hue, saturation, and luma
+		- Top slider is hue, middle slider is saturation, bottom slider is luma
+		- Selections supported
+		
+	Gradient Map: Apply a gradient based on the luma values of an image
+		- TODO: Create window
+		- By default: Uses a 2-color gradient based on the active backgroud and foreground color
+		- Selections supported
+		
+	Replace Color: Replace one color with another based on a specified amount/tolerance level
+		- Both color boxes are clickable and bring up the color chooser window
+		- "Amount" slider controls the tolerance for color matching
+		- Selections supported
+		
+	Add Noise: Apply additive noise based on a specified amount
+		- Selections supported
+		
+	Posterize: Separate an image into levels ranging from 2 to 256
+		- Selections supported
+		
+	Box Blur: Blur the image using a box blur based on a specified radius
+		- Experimental - disabled for now
+		
+	Motion Blur: Blur the image based on a specified angle and length
+		- Experiemental - disabled for now
+		
+VIEW MENU:
+	3D View: Opens the THREE.js model viewer and UV editor
+		- [Dump UVs]: Sends the model UVs to the edit area
+		- [Clear UVs]: Removes the model UVs from the edit area
+		- [Import]: Import a JSON model to the viewer (Old UVs are cleared automatically)
+		- [Export]: Export the model to JSON format (experimental - disabled for now)
+		- Model texture is updated each time the history state is changed
+		- Model UVs are updated each time they're edited with the UV Edit tool
+		- Model can be rotated with click and drag and zoomed with the scroll wheel
+		
+	Zoom In: Zoom into the image up to 1600%
+		- HOTKEY: ctrl+=
+		
+	Zoom Out: Zoom out of the image up to 5%
+		- HOTKEY: ctrl+-
+		
+	Reset Zoom: Reset the zoom to 100%
+		- HOTKEY: ctrl+0
+		
+	Fullscreen: Toggle fullscreen mode
+		- Exit fullscreen with escape key
+		- Bug: WebGL canvas is not visible
+		
+SETTINGS MENU:
+	Hotkeys: View and modify hotkeys
+		- Click a hotkey button and enter the new hotkey to change it
+		- [Defaults]: Restores all hotkeys to defaults
+
+	Themes: Change the color theme
+		- Set to "Black" by default
+		
+HELP MENU:
+	Tutorial: Coming soon
+	
+	Manual: Coming soon
+	
+	About: Shows release and licensing info about Photoblob
+
+
+
+TOOLBOX:
+
+	- Disabled tools are displayed with a gray 'X'
+
+	Box Select: Create a rectangular selection on the image
+		- Hold down click to start and release click to end
+		- Automatically shrinks to image bounds
+		
+	UV Edit: Enter UV editing mode
+		- UVs can be selected with left-click and moved by holding right-click and moving
+		- Hold shift and left-click to select multiple UVs
+		- More options to come
+		
+	Color Pick: Set the foreground color based on the image pixel at mouse position
+		- Click to set color
+		- Defaults to gray if clicked off the image
+		
+	Brush: Apply a brush to the image
+		- Click and drag to begin applying brush
+		- Color is based on foreground color
+		- Brush size and type customization to come
+		
+	Pencil: Set the color of the image pixel at mouse position
+		- Similar functionality to Brush tool
+		- Hold ctrl and click to erase any existing pencil marks
+	
+	Erase: Apply an erasing brush to the image
+		- Similar functionality to Brush tool
+		- Erases to empty alpha
+		
+	Fill: Fill an image area based on color
+		- Fill color is based on foreground color
+		- Bug: May cause recursion overflow if the fill area is too "complicated"
+		
+	Pen: Create a polygon selection on the image
+		- Click to start and add point in polygon
+		- Double-click to complete polygon
+		- Inclusive filling on self-intersecting polygons
+		
+COLOR BOX:
+	Foreground Color: The color on the top-left
+		- Default is white
+		- Click to open color chooser
+		
+	Background Color: The color on the bottom-right
+		- Default is black
+		- Click to open color chooser
+		
+	Switch: Arrow icon on the top-right
+		- Switches foreground and background color
+		
+	Defaults: Small black and white icon on the bottom-left
+		- Sets foreground to white and background to black
+		
+COLOR CHOOSER:
+	Hue (1st bar): Controls the color hue
+	Saturation (2nd bar): Controls the color saturation
+	Luma (3rd bar): Controls the color luma
+	Alpha (4th abr): Controls the color alpha
+	
+	- RGB values can be controlled with the 3 text inputs on the right
+	
+	- Color pick button has similar functionality to Color Pick tool
+	
+	- Hex color text input not implemented yet
+
+HISTORY:
+	- Click a history entry load it into the image area
+	
+	- Each history state is named after the change that occured at that time
+	
+	- The first history state is always "Open" (the image's original state)
+	
+	- Making changes to the image when set to an earlier history state will remove all later states
+	
+STATUS BAR:
+	- Shows the active tool on the left
+	- Shows the image name, dimensions, and original file size in the middle
+	- Shows the current zoom value on the right (editable with input)
+
+OTHER:
+	Image Browser: Used to view and load from a collection of images
+		- Hover over each image to see its width, height, file size, and type

@@ -17,8 +17,14 @@
 
 var express = require("express"),
 path = require('path'),
+bodyParser = require("body-parser"),
+//TDB = require('./texturedb.js'),
+L2I = require('./link2img.js'),
 app	= express(),
 CL = function(str) { console.log(str); };
+
+// Init body parser
+app.use(bodyParser.json());
 
 // Define public directory (visible to client)
 app.use(express.static(__dirname+'/public'));
@@ -28,9 +34,29 @@ app.get('/', function(req, res) {
 	res.sendFile(path.join(__dirname, 'public/index.html'));
 });
 
+// Request texture list
+app.post('/textures', function(req, res) {
+	CL(req);
+	res.send("Hey");
+});
+
+// Open image from link
+app.post('/openlink', function(req, res) {
+	if(req.body && req.body.link) {
+		L2I.GetFromLink(req.body.link, function(img) {
+			if(img) {
+				if(typeof(img) == "string") res.send(img);
+				else res.send("IMAGES: "+JSON.stringify(img));
+			} else {
+				res.send("Couldn't load image");
+			}
+		});
+	} else {
+		res.send("Couldn't access JSON.");
+	}
+});
+
 // Start server
 app.listen(3000, function(){
 	CL("Working on port 3000");
 });
-
-

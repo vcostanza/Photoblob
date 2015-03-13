@@ -74,6 +74,18 @@ body {
 	margin-top: 20%;
 }
 
+/* Make sure input is invisible and untouchable BUT still useable */
+input {
+	width: 0px;
+	height: 0px;
+	background: none;
+	border: none;
+	outline: none;
+	position: absolute;
+	pointer-events: none;
+	opacity: 0;	
+}
+
 form {
 	display: none;
 }

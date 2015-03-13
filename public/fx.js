@@ -340,7 +340,7 @@ IMGFX = {
 	
 	/* Load history at index */
 	LoadHistory: function(index, clear) {
-		if(IMGFX.history.length == 0) return;
+		if(!ImageArea.open || IMGFX.history.length == 0) return;
 		
 		var oldimg = IMGFX.GetHistory(index).img;
 		if(oldimg.width != IMGFX.tw || oldimg.height != IMGFX.th) {
@@ -1062,6 +1062,43 @@ IMGFX = {
 		return T()-t1;
 	},
 	
+	/* Separate image into levels */
+	Posterize: function(levels) {
+		
+		if(!IMGFX.target) return;
+		
+		levels--;
+		if(levels < 1) levels = 1;
+		
+		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, img = IMGFX.GetTarget(), w = img.w, o = img.o*4, m = img.m, pw = img.fw*4, dl = w*img.h,
+			p = o, px = 0, py = 0, i = 0, t1 = T();
+		
+		for(; i < dl; i++) {
+			if(!m || m[i] > 0) {
+				
+				d[p] = (ROUND((d2[p]/255)*levels)/levels)*255;
+				d[p+1] = (ROUND((d2[p+1]/255)*levels)/levels)*255;
+				d[p+2] = (ROUND((d2[p+2]/255)*levels)/levels)*255;
+				
+				if(m && m[i] < 255) IMGFX.PIX_MixSelection(p, d, d2, m[i]/255);
+			}
+			
+			px++;
+			p+=4;
+			if(px == w) {
+				px = 0;
+				py += pw;
+				p = py+o;
+			}			
+		}
+		
+		ImageArea.update();
+		
+		//CL("Posterize("+levels+"): "+(T()-t1));
+		
+		return T()-t1;
+	},
+	
 	/* Draw pixel by pixel */
 	ApplyPencil: function(x, y, c, restore) {
 		if(!IMGFX.target) return;
@@ -1476,15 +1513,15 @@ IMGFX = {
 			filled[i/4] = 1;
 		},
 		
-		isBorder = function(i, start_w, end_w, ignoreFill) {
-			return (!ignoreFill && filled[i/4]) || i < start_w || i >= end_w || getTol(i) > 1;
+		isBorder = function(i, start_w, end_w) {
+			return filled[i/4] || i < start_w || i >= end_w || getTol(i) > 1;
 		},
 		
 		fillSegment = function(p) {
 			var div = p/pw, start_w = FLOOR(div)*pw, end_w = (FLOOR(div)+1)*pw, sw = start_w, ew = end_w, e = -4, i = p, above = null, below = null, hit = false, c = 0;
 			
 			// Stop once the initial pixel is already filled
-			if(isBorder(p, sw, ew))	return;
+			if(isBorder(p, sw, ew)) return;
 			
 			// This prevents wasteful recursion if the left side is blocked initially
 			if(isBorder(p-4, sw, ew)) e = 4;
@@ -1497,7 +1534,7 @@ IMGFX = {
 					hit = isBorder(i, sw, ew);
 							
 					// Check above
-					if(!hit && !isBorder(i-pw, 0, dl4, true)) {
+					if(!hit && !isBorder(i-pw, 0, dl4)) {
 						above = i-pw;
 					} else {
 						if(above != null) {
@@ -1508,7 +1545,7 @@ IMGFX = {
 					}
 					
 					// Check below
-					if(!hit && !isBorder(i+pw, 0, dl4, true)) {
+					if(!hit && !isBorder(i+pw, 0, dl4)) {
 						below = i+pw;
 					} else {
 						if(below != null) {
@@ -1522,7 +1559,7 @@ IMGFX = {
 					hit = isBorder(i, 0, dl4);
 					
 					// Check left
-					if(!hit && !isBorder(i-4, sw, ew, true)) {
+					if(!hit && !isBorder(i-4, sw, ew)) {
 						above = i-4;
 					} else {
 						if(above != null) {
@@ -1533,7 +1570,7 @@ IMGFX = {
 					}
 					
 					// Check right
-					if(!hit && !isBorder(i+4, sw, ew, true)) {
+					if(!hit && !isBorder(i+4, sw, ew)) {
 						below = i+4;
 					} else {
 						if(below != null) {
@@ -1546,15 +1583,11 @@ IMGFX = {
 				
 				// Check current
 				if(hit) {
-					if(e == -4) {
-						e = 4;
-					} else if(e == 4) {
-						e = pw;
-					} else if(e == pw) {
-						e = -pw;	
-					} else {
-						return;
-					}
+					if(e == -4) e = 4;
+					else if(e == 4) e = pw;
+					else if(e == pw) e = -pw;	
+					else return;
+					
 					i = p;
 					sw = start_w;
 					ew = end_w;

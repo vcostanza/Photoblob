@@ -170,17 +170,181 @@ PBOX_New = PBOX_Base.extend({
 	}
 });
 
+/* Open from link window */
+PBOX_OpenLink = PBOX_Base.extend({
+	init: function() {
+		this._super("Open Link", 500, 80, true);
+		this.b_apply.setText("Open");
+		
+		// Image link text box
+		this.imgLink = new TextBox(this, 480, 20, "http://photo.blob.software/favicon.png", 48);
+		
+		this.setChildren(this.imgLink);
+	},
+	def: function() {
+	},
+	apply: function() {
+		OpenImageLink(this.imgLink.get());
+	},	
+	detect: function(x, y, type) {		
+		this._super(x, y, type);		
+		this.imgLink.detect(x, y, type);
+	},
+	draw: function(ctx) {
+		ctx.save();
+		
+		this.imgLink.set(this.x+10, this.y+10);
+		
+		// Drawing begins here
+		this._super(ctx);
+	
+		ctx.restore();
+	}
+});
+
+/* Open SVG image window */
+PBOX_OpenSVG = PBOX_Base.extend({
+	init: function() {
+		this._super("Open SVG Image", 240, 150, true);
+		
+		this.b_apply.setText("Open");
+		this.b_cancel.setText("Default");
+		
+		this.svg = this.svgName = null;
+		
+		this.per = new CheckBox("Percentage");
+		this.txt = [new TextBox(this, 80, 24, 128, 4, true, 1, 5000), new TextBox(this, 80, 24, 128, 4, true, 1, 5000)];
+		this.lbl = [new Label(80, 24, "Width:"), new Label(80, 24, "Height:")];
+		
+		// Link button
+		this.link = new ImageButton("link", 30, 30);
+		this.linked = true;
+		
+		// Image properties
+		this.scale = [1.0, 1.0];
+		this.size = [1, 1];
+		
+		// Pixels or percentage
+		this.sizeType = 0;
+		
+		// Text change event
+		this.txt[0].onchange = this.txt[1].onchange = function(o, n) {
+			
+			// Get other text
+			var other = (this == this.parent.txt[0] ? 1 : 0);
+			
+			if(this.parent.linked) {
+				if(this.parent.sizeType == 0) this.parent.txt[other].value = ROUND(this.parent.scale[other]*n);
+				else this.parent.txt[other].value = n;
+			}
+		};
+		
+		this.setChildren(this.per, this.txt, this.lbl, this.link);
+	},
+	open: function(img, name) {
+		if(!img || typeof(img) == "string") return;
+		this.svg = img;
+		this.svgName = (name ? name : "image.svg");
+		this._super();
+	},
+	def: function() {
+		if(!this.svg) return;
+		
+		// Set defaults to SVG properties
+		var w = this.svg.width, h = this.svg.height;
+		this.txt[0].value = w;
+		this.txt[1].value = h;
+		this.scale = [w/h, h/w];
+		this.size = [w, h];
+		this.sizeType = 0;
+		this.per.active = false;
+	},
+	apply: function() {
+		// Rasterize SVG with new dimensions
+		var w = this.txt[0].get(), h = this.txt[1].get(), can = document.createElement("canvas");
+		if(this.per.active) {
+			w = CEIL((w/100)*this.size[0]);
+			h = CEIL((h/100)*this.size[1]);
+		}
+		can.width = w;
+		can.height = h;
+		GC(can).drawImage(this.svg, 0, 0, w, h);
+		OpenImage(can.toDataURL(), this.svgName, true);
+	},
+	cancel: function() {
+		// Open with defaults
+		OpenImage(this.svg.src, this.svgName, true);
+	},
+	detect: function(x, y, type) {
+		
+		this._super(x, y, type);
+		
+		var i = 0;
+		
+		// Pixel/percentage toggle
+		if(this.per.detect(x, y, type) && type == "click") {
+			
+			// Change pixels to percentage and vice versa
+			if(this.per.active) {
+				this.sizeType = 1;
+				this.txt[0].value = ROUND((this.txt[0].get()/this.size[0])*100);
+				this.txt[1].value = ROUND((this.txt[1].get()/this.size[1])*100);
+			} else {
+				this.txt[0].value = ROUND((this.txt[0].get()/100)*this.size[0]);
+				this.txt[1].value = ROUND((this.txt[1].get()/100)*this.size[1]);
+				this.sizeType = 0;
+			}
+		}
+		
+		// Text boxes
+		for(i = 0; i < this.txt.length; i++) {
+			this.txt[i].detect(x, y, type);
+		}
+		
+		// Link button
+		if(type == "click" && this.link.detect(x, y, type)) {
+			if(this.linked) this.link.setIcon("unlink");
+			else this.link.setIcon("link");
+			this.linked = !this.linked;
+			Update();
+		}
+		
+	},
+	draw: function(ctx) {
+		ctx.save();
+		
+		var i = 0;
+		
+		for(; i < this.txt.length; i++) {
+			this.lbl[i].set(this.x+15, this.y+15+(i*30));
+			this.txt[i].set(this.x+100, this.y+15+(i*30));
+		}
+		this.per.set(this.x+15, this.y+80);		
+		this.link.set(this.x+210, this.y+26);
+		
+		// Drawing begins here
+		this._super(ctx);
+		
+		ctx.font = "18px "+F1;
+		ctx.fillStyle = C1;
+		
+		for(i = 0; i < 2; i++) {
+			this.sizeType == 0 ? ctx.fillText("px", this.x+185, this.y+32+(i*30)) : ctx.fillText("%", this.x+185, this.y+32+(i*30))
+		}
+	
+		ctx.restore();
+	}
+});
+
 /* Save image window */
 PBOX_Save = PBOX_Base.extend({
 	init: function() {
 		this._super("Save Image", 300, 150);
 		this.b_apply.setText("Save");
-		
-		this.imgName = "untitled.png";
 		this.mime = 0;
 		
 		// Image name text box
-		this.imgTxt = new TextBox(this, 280, 20, this.imgName, 32);
+		this.imgTxt = new TextBox(this, 280, 20, "untitled.png", 32);
 		
 		// File type boxes
 		this.rb = [new RadioButton("JPEG"), new RadioButton("PNG")];
@@ -189,7 +353,6 @@ PBOX_Save = PBOX_Base.extend({
 		this.setChildren(this.imgTxt, this.rb);
 	},
 	def: function() {
-		this.imgName = IMG_NAME;
 		this.imgTxt.value = IMG_NAME;
 		this.rb[this.rb_val].toggle(true);
 	},
@@ -224,7 +387,7 @@ PBOX_Save = PBOX_Base.extend({
 		this.imgTxt.detect(x, y, type);
 		
 		// Radio buttons
-		if(type == "up") {
+		if(type == "click") {
 			for(var i = 0; i < this.rb.length; i++) {
 				if(this.rb[i].detect(x, y, type)) {
 					this.rb_val = this.mime = i;
@@ -311,7 +474,7 @@ PBOX_Resize = PBOX_Base.extend({
 		
 		// Preview and pixel/percentage
 		for(; i < this.cb.length; i++) {
-			if(this.cb[i].detect(x, y, type) && type == "up") {
+			if(this.cb[i].detect(x, y, type) && type == "click") {
 				
 				// Change pixels to percentage and vice versa
 				if(i == 1) {
@@ -335,7 +498,7 @@ PBOX_Resize = PBOX_Base.extend({
 		}
 		
 		// Link button
-		if(type == "up" && this.link.detect(x, y, type)) {
+		if(type == "click" && this.link.detect(x, y, type)) {
 			if(this.linked) this.link.setIcon("unlink");
 			else this.link.setIcon("link");
 			this.linked = !this.linked;
@@ -476,7 +639,7 @@ PBOX_ColorBox = PBOX_Base.extend({
 		}
 		
 		// Color pick
-		if(type == "up") {
+		if(type == "click") {
 			
 			if(this.cpick.detect(x, y, type)) {
 				this.picking = true;
@@ -543,7 +706,7 @@ PBOX_FontBox = PBOX_Base.extend({
 		
 		this._super(x, y, type);
 		
-		if(type != "up") return;
+		if(type != "click") return;
 		
 		// Text boxes
 		for(var i = 0; i < this.txt.length; i++) {
@@ -587,7 +750,7 @@ PBOX_Grayscale = PBOX_Base.extend({
 	detect: function(x, y, type) {
 		
 		// Radio buttons
-		if(type == "up") {
+		if(type == "click") {
 			for(var i = 0; i < this.rb.length; i++) {
 				if(this.rb[i].detect(x, y, type)) {
 					this.rb_val = i;
@@ -634,7 +797,7 @@ PBOX_Mirror = PBOX_Base.extend({
 	},
 	detect: function(x, y, type) {
 		
-		if(type == "up") {
+		if(type == "click") {
 			this.hr.detect(x, y, type);
 			this.vr.detect(x, y, type);
 			IMGFX.Mirror(this.vr.active, this.hr.active);
@@ -678,7 +841,7 @@ PBOX_InvertColors = PBOX_Base.extend({
 	},
 	detect: function(x, y, type) {
 		
-		if(type == "up") {
+		if(type == "click") {
 			
 			var changed = false;
 			
@@ -728,7 +891,7 @@ PBOX_Brightness = PBOX_Base.extend({
 	detect: function(x, y, type) {
 		
 		// Radio buttons
-		if(type == "up") {
+		if(type == "click") {
 			for(var i = 0; i < this.rb.length; i++) {
 				this.rb[i].toggle(false);
 				if(this.rb[i].detect(x, y, type)) {
@@ -802,6 +965,46 @@ PBOX_AddNoise = PBOX_Base.extend({
 		ctx.font = "22px "+F1;
 		ctx.fillStyle = C1;
 		ctx.fillText(ROUND(this.s.value*200), this.s.x+this.s.w+10, this.s.y+20, this.s.w);
+	
+		ctx.restore();
+	}
+});
+
+/* Posterize */
+PBOX_Posterize = PBOX_Base.extend({
+	init: function() {
+		this._super("Posterize", 380, 100);
+		this.s = new Slider(254);
+		this.setChildren(this.s);
+	},
+	def: function() {
+		this.s.value = 0.0;
+		IMGFX.Posterize(2);
+	},
+	apply: function() {
+		IMGFX.AddHistory("Posterize");
+	},
+	detect: function(x, y, type) {
+		
+		// Slider
+		if(this.s.detect(x, y, type)) {
+			IMGFX.Posterize(ROUND(this.s.value*254)+2);
+		}
+		
+		this._super(x, y, type);
+		
+	},
+	draw: function(ctx) {
+		ctx.save();
+		
+		this.s.set(this.x+20, this.y+10);
+		
+		// Drawing begins here
+		this._super(ctx);
+		
+		ctx.font = "22px "+F1;
+		ctx.fillStyle = C1;
+		ctx.fillText(ROUND(this.s.value*254)+2, this.s.x+this.s.w+10, this.s.y+20, this.s.w);
 	
 		ctx.restore();
 	}
@@ -1234,7 +1437,7 @@ PBOX_ChooseTheme = PBOX_Base.extend({
 	init: function() {
 		this._super("Choose Theme", 250, 280, true);
 		
-		this.rb = [new RadioButton("Default"), new RadioButton("Green"), new RadioButton("Red"), new RadioButton("Yellow"), new RadioButton("Cyan"),
+		this.rb = [new RadioButton("Blue"), new RadioButton("Green"), new RadioButton("Red"), new RadioButton("Yellow"), new RadioButton("Cyan"),
 		new RadioButton("Pink"), new RadioButton("Orange"), new RadioButton("Lime"), new RadioButton("Gray"), new RadioButton("Deep Blue"),
 		new RadioButton("Deep Green"), new RadioButton("Deep Red"), new RadioButton("Deep Yellow"), new RadioButton("Deep Cyan"),
 		new RadioButton("Deep Pink"), new RadioButton("Dela"), new RadioButton("High Contrast"), new RadioButton("Black")];
@@ -1258,7 +1461,7 @@ PBOX_ChooseTheme = PBOX_Base.extend({
 	},
 	detect: function(x, y, type) {
 		
-		if(type == "up") {
+		if(type == "click") {
 			// Radio buttons
 			for(var i = 0; i < this.rb.length; i++) {
 				if(this.rb[i].detect(x, y, type)) {
@@ -1300,15 +1503,17 @@ PBOX_ImageBrowser = PBOX_Base.extend({
 		this.b_prev = new Button("Previous");
 		this.rb = [new RadioButton("Difference", 1), new RadioButton("Size", 2), new RadioButton("", 3)];
 		
-		this.setChildren(this.b_next, this.b_prev, this.rb);
+		this.children = [this.b_next, this.b_prev];
+		
+		this.images = [];	// Images array
+		this.hover = -1;	// Hovered image
+		this.page = 0;		// Current page #
+		this.pages = 0;		// Total pages
 	},
-	images: [],	// Images array
-	hover: -1,	// Hovered image
-	page: 0,	// Current page #
-	pages: 0,	// Total pages
-	tol: 2000,	// Total difference tolerance
-	tol_cutoff: 0,
-	
+	open: function() {
+		if(this.images.length == 0) return;
+		this.super();
+	},
 	def: function() {
 		this.page = 0;
 		this.pages = CEIL(this.images.length/8);
@@ -1324,7 +1529,7 @@ PBOX_ImageBrowser = PBOX_Base.extend({
 	detect: function(x, y, type) {
 		
 		// Image results		
-		var i = p8 = this.page*8, img = x2 = y2 = 0;
+		var p8 = this.page*8, i = p8, img = x2 = y2 = 0;
 		
 		for(; i < MIN(this.images.length, p8+8); i++) {
 						
@@ -1332,13 +1537,25 @@ PBOX_ImageBrowser = PBOX_Base.extend({
 			if(img.loaded) {
 				var x2 = this.pos(i), y2 = x2[1], x2 = x2[0];
 				if(x >= x2 && x < x2+200 && y >= y2 && y < y2+200) {
+					SC("pointer");
 					if(type == "move") {
 						if(this.hover != i) {
 							this.hover = i;
 							Update();
 						}
-					} else if(type == "up") {
-						CL("OPEN "+i);
+					} else if(type == "click") {
+						//CL("OPEN "+i);
+						
+						// Base 64 image
+						if(img.src.indexOf("data:") == 0) {
+							OpenImage(img.src, "image."+MimeToExt(img.src.substring(5, img.src.indexOf(";base64"))));
+							
+						// We have to load it externally otherwise
+						} else {
+							OpenImageLink(img.src);
+						}
+						
+						this.close();
 					}
 				}
 			}
@@ -1373,7 +1590,7 @@ PBOX_ImageBrowser = PBOX_Base.extend({
 		ctx.fillStyle = BG4;
 		ctx.fillRect(this.x+10, this.y+10, this.w-20, this.h-60);
 		
-		var il = this.images.length, i = p8 = this.page*8, img = x = y = l = 0;
+		var il = this.images.length, p8 = this.page*8, i = p8, img, x, y, l = 0;
 		
 		ctx.font = "18px "+F1;
 		
@@ -1382,7 +1599,9 @@ PBOX_ImageBrowser = PBOX_Base.extend({
 			
 			img = this.images[i];
 				
-			var x = this.pos(i), y = x[1], x = x[0];
+			x = this.pos(i);
+			y = x[1];
+			x = x[0];
 			ctx.fillStyle = BG3, ctx.fillRect(x, y, 200, 200);
 			
 			// Draw image when it's loaded
@@ -1407,7 +1626,7 @@ PBOX_ImageBrowser = PBOX_Base.extend({
 		ctx.font = "20px "+F1;
 		ctx.fillStyle = C2;
 		if(this.pages > 0)
-			ctx.fillText((this.tol_cutoff)+" results (page "+(this.page+1)+"/"+this.pages+")", this.x+20, this.y+40, this.w);
+			ctx.fillText(il+" results (page "+(this.page+1)+"/"+this.pages+")", this.x+20, this.y+40, this.w);
 		
 		ctx.restore();
 	}
@@ -1477,7 +1696,7 @@ PBOX_Hotkeys = PBOX_Base.extend({
 		
 		// Detect hotkey input
 		for(var i = 0; i < this.btn.length; i++) {
-			if(this.btn[i].detect(x, y, type) && type == "up" && this.input == null) {
+			if(this.btn[i].detect(x, y, type) && this.input == null) {
 				this.input = i;
 				this.btn[i].setText("Enter hotkey");
 				this.btn[i].toggle(false);
@@ -1492,7 +1711,7 @@ PBOX_Hotkeys = PBOX_Base.extend({
 		}
 		
 		// Restore default hotkeys
-		if(this.b_def.detect(x, y, type) && type == "up") {
+		if(this.b_def.detect(x, y, type)) {
 			DefaultHotkeys();
 			this.sync();
 		}
@@ -1551,8 +1770,8 @@ PBOX_About = PBOX_Base.extend({
 		// Text
 		this.name = "Photoblob";
 		this.desc = "Image/Texture Editor and 3D Model Viewer";
-		this.version = "0.1.8";
-		this.update = "Updated 03/04/2015";
+		this.version = "0.1.9";
+		this.update = "Updated 03/13/2015";
 		this.site = "http://photo.blob.software/";
 		this.copy = "© 2015 Vincent Costanza";
 		
@@ -1630,6 +1849,8 @@ PBOX_About = PBOX_Base.extend({
 PBOX = {
 		
 	New: new PBOX_New(),
+	OpenLink: new PBOX_OpenLink(),
+	OpenSVG: new PBOX_OpenSVG(),
 	Save: new PBOX_Save(),
 	Resize: new PBOX_Resize(),
 	ColorBox: new PBOX_ColorBox(),
@@ -1639,6 +1860,7 @@ PBOX = {
 	InvertColors: new PBOX_InvertColors(),
 	Brightness: new PBOX_Brightness(),
 	AddNoise: new PBOX_AddNoise(),
+	Posterize: new PBOX_Posterize(),
 	BoxBlur: new PBOX_BoxBlur(),
 	Shift: new PBOX_Shift(),
 	ChangeHSL: new PBOX_ChangeHSL(),
@@ -1673,7 +1895,7 @@ PBOX = {
 					// X button
 					if(((t.x+t.w)-x) >= 0 && ((t.x+t.w)-x) <= 30) {
 						SC("pointer");
-						if(type == "up") t.close();
+						if(type == "click") t.close();
 					}					
 				}
 				

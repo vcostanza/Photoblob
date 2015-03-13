@@ -259,7 +259,7 @@ RadioButton = Box.extend({
 		this.value = value;
 	},
 	devent: function(type) {
-		if(type == "up") this.toggle();
+		if(type == "click") this.toggle();
 	},
 	draw: function(ctx) {
 	
@@ -292,7 +292,7 @@ CheckBox = Box.extend({
 		this.value = value;
 	},
 	devent: function(type) {
-		if(type == "up") this.toggle();
+		if(type == "click") this.toggle();
 	},
 	draw: function(ctx) {
 	
@@ -321,8 +321,15 @@ Slider = Box.extend({
 		this.held = false;
 	},
 	detect: function(x, y, type) {
-		if(type != "move") {
-			if(WB(x, y, this) || (!MDOWN && this.held)) {
+		
+		var step = 1/this.w, hover = WB(x, y, this);
+		
+		if(type == "wheelup" && hover) this.value = Clamp(this.value+step, 0, 1);
+		
+		else if(type == "wheeldown" && hover) this.value = Clamp(this.value-step, 0, 1);
+		
+		else if(type != "move") {
+			if(hover || (!MDOWN && this.held)) {
 				var v = this.value;
 				this.value = Clamp((x-this.x)/(this.w), 0, 1);
 				this.held = MDOWN;
@@ -382,7 +389,7 @@ TextBox = Box.extend({
 	unfocus: function() {
 		if(this == FocusObj) {
 			if(this.numOnly && this.get(true) == "") this.value = this.min;	// Set empty number-only text fields to minimum
-			FocusObj = null;
+			SetInputFocus();
 			Update();
 		}
 	},
@@ -391,21 +398,19 @@ TextBox = Box.extend({
 	},
 	detect: function(x, y, type) {
 		
-		if(type == "up" && !WB(x, y, this)) return;
+		if(type == "click" && !WB(x, y, this)) return;
+		
+		if(WB(x, y, this)) SC("text");
 		
 		switch(type) {
-			
-			case "move":				
-				if(WB(x, y, this)) SC("text");
-				break;
-			
-			case "up":
-				FocusObj = this;
+						
+			case "click":
+				SetInputFocus(this);
 				var ctx = GC(canvas);
-				ctx.font = (this.h-4)+"px "+F1;
+				ctx.font = (this.h-6)+"px "+F1;
 				this.ind = this.get(true).length;
 				
-				var o = x-this.x, v = this.get(true), squish = Clamp((this.w-8)/ctx.measureText(v).width, 0, 1), c, i = 0;
+				var o = x-this.x, v = this.get(true), squish = Clamp((this.w-8)/ctx.measureText(v).width, 0, 1), c = 0, i = 0;
 				
 				for(; i < v.length; i++) {
 					c += ctx.measureText(v[i]).width*squish;
@@ -582,7 +587,7 @@ ColorBox = Box.extend({
 		this.value = [0, 0, 0, 255];
 	},
 	devent: function(type) {
-		if(type == "up")
+		if(type == "click")
 			PBOX.ColorBox.open(this, this.setColor, this.getColor());
 	},
 	onChange: function() {
@@ -880,7 +885,8 @@ EditArea = {
 				}
 				MainColors.setFG(d);
 				MainColors.drawInside(ctx);
-			} else if(type == "up") {
+			} else if(type == "click") {
+				CL(ix, iy);
 				ToolBox.clear();
 				Update();
 			}
@@ -1019,7 +1025,7 @@ ImageArea = {
 	
 	// Return the transformed x and y of the image area (after zoom and grab)
 	getXY: function(x, y) {
-		var e = EditArea, w = IMGFX.tw*ZOOM, h = IMGFX.th*ZOOM, ix = FLOOR((e.w-w)/2+e.x)+this.off_x, iy = FLOOR((e.h-h)/2+e.y)+this.off_y;
+		var e = EditArea, w = IMGFX.tw*ZOOM, h = IMGFX.th*ZOOM, ix = FLOOR((e.w-w)/2+e.x+(this.off_x*ZOOM)), iy = FLOOR((e.h-h)/2+e.y+(this.off_y*ZOOM));
 		
 		return [FLOOR((x-ix)/ZOOM), FLOOR((y-iy)/ZOOM)]
 	},
@@ -1057,7 +1063,7 @@ ImageArea = {
 		
 		/* This code is a mess - do something! */
 		
-		var x = this.off_x, y = this.off_y, e = EditArea, z = ZOOM, w = IMGFX.tw*z, h = IMGFX.th*z, w2 = CEIL(w/2), h2 = CEIL(h/2), posx = FLOOR((e.w-w)/2+e.x)+x, posy = FLOOR((e.h-h)/2+e.y)+y,
+		var z = ZOOM, x = this.off_x*z, y = this.off_y*z, e = EditArea, w = IMGFX.tw*z, h = IMGFX.th*z, w2 = CEIL(w/2), h2 = CEIL(h/2), posx = FLOOR((e.w-w)/2+e.x+x), posy = FLOOR((e.h-h)/2+e.y+y),
 			ex = IMGFX.tw, ey = IMGFX.th,
 			sx = Clamp(posx, e.x-w2, e.x+e.w-w2),
 			sy = Clamp(posy, e.y-h2, e.y+e.h-h2);
@@ -1107,7 +1113,7 @@ ImageArea = {
 			ZOOM = 1;
 		}
 		
-		var w = IMGFX.tw*ZOOM, h = IMGFX.th*ZOOM, iw = this.w = this.img.width, ih = this.h = this.img.height, iw2 = (iw/2), ih2 = (ih/2), x = FLOOR((e.w-w)/2+e.x)+this.off_x, y = FLOOR((e.h-h)/2+e.y)+this.off_y;
+		var w = IMGFX.tw*ZOOM, h = IMGFX.th*ZOOM, iw = this.w = this.img.width, ih = this.h = this.img.height, iw2 = (iw/2), ih2 = (ih/2), x = FLOOR((e.w-w)/2+e.x+(this.off_x*ZOOM)), y = FLOOR((e.h-h)/2+e.y+(this.off_y*ZOOM));
 		
 		this.x = Clamp(x, e.x, e.x+e.w-iw);
 		this.y = Clamp(y, e.y, e.y+e.h-ih);
