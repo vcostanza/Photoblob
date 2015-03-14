@@ -1755,6 +1755,79 @@ PBOX_Hotkeys = PBOX_Base.extend({
 	}
 });
 
+/* Add-on info */
+PBOX_AddOn = PBOX_Base.extend({
+	init: function() {
+		this._super("Quick-Open Add-on", 400, 160, true);
+		
+		// Remove all children elements
+		delete this.b_apply;
+		delete this.b_cancel;
+		
+		this.desc = "Right-click any image to open in Photoblob";
+		this.compat = "Only works in Firefox 36+";
+		this.addonURL = "http://blob.software/photoblob_quick-open.xpi";
+		
+		// Link to install
+		this.install = new Button("Install Add-on");
+		
+		// Source code link
+		this.source = new Button("Download Source");
+		
+		this.children = [this.install, this.source];
+	},
+	def: function() {
+	},
+	apply: function() {
+	},
+	detect: function(x, y, type) {
+		
+		var xport = E("export");
+		
+		// Install add-on
+		if(this.install.detect(x, y, type)) {
+			InstallTrigger.install({"Photoblob Quick-Open":{
+				URL: this.addonURL,
+				IconURL: "http://photo.blob.software/favicon.png",
+				Hash: "sha1:532c094b04ca79bb97686628380dfe819c3ec4eb",
+				toString: function() { return this.URL; }
+			}});				
+		}
+		
+		// Download add-on source code zip
+		if(this.source.detect(x, y, type)) {
+			xport.href = "http://photo.blob.software/photoblob-addon.zip";
+			xport.click();
+		}
+		
+		this._super(x, y, type);
+	},
+	draw: function(ctx) {
+		ctx.save();
+		
+		// Adjust buttons
+		this.install.set(this.x+((this.w-this.install.w)/2), this.y+80);
+		this.source.set(this.x+((this.w-this.source.w)/2), this.y+120);
+		
+		// Drawing begins here
+		this._super(ctx);
+		
+		// Description
+		ctx.font = "16px "+F1;
+		ctx.fillStyle = C1;
+		var w = ctx.measureText(this.desc).width;
+		ctx.fillText(this.desc, this.x+(this.w-w)/2, this.y+30, this.w);
+		
+		// Compatibility
+		ctx.font = "20px "+F1;
+		ctx.fillStyle = C2;
+		w = ctx.measureText(this.compat).width;
+		ctx.fillText(this.compat, this.x+(this.w-w)/2, this.y+60, this.w);
+	
+		ctx.restore();
+	}
+});
+
 /* About info */
 PBOX_About = PBOX_Base.extend({
 	init: function() {
@@ -1869,6 +1942,7 @@ PBOX = {
 	ChooseTheme: new PBOX_ChooseTheme(),
 	ImageBrowser: new PBOX_ImageBrowser(),
 	Hotkeys: new PBOX_Hotkeys(),
+	AddOn: new PBOX_AddOn(),
 	About: new PBOX_About(),
 	
 	detect: function(x, y, type) {

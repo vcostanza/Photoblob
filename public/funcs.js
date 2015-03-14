@@ -482,6 +482,9 @@ function StartEditor() {
 			Update();
 			DrawEditor();
 			
+			QuickOpenCheck();
+			addEventListener("focus", function(){setTimeout(QuickOpenCheck, 50);});	// Because the tab activate event fires after window.focus
+			
 			// Hide the loader
 			l.style.pointerEvents = "none";
 			l.style.opacity = 0.0;
@@ -685,6 +688,21 @@ function SetInputFocus(obj) {
 		input.setAttribute("size", obj.maxlen);
 		input.focus();
 	}
+}
+
+/* Quick-open add-on: check for open request */
+function QuickOpenCheck() {
+	try {
+		var qoi = sessionStorage.getItem("photoblob-quick-open-img");
+		if(qoi) {
+			sessionStorage.removeItem("photoblob-quick-open-img");
+			qoi = JSON.parse(qoi);
+			if(qoi.data && qoi.name && qoi.size) {
+				IMG_SIZE = qoi.size;
+				OpenImage(qoi.data, qoi.name);
+			}
+		}
+	} catch(e) {}
 }
 
 /* Detect regular typing */
@@ -1312,8 +1330,7 @@ function InitMenus() {
 				break;
 			case "Help":
 				MenuBar.items[m].setMenu(new Menu([
-					new MenuItem("Tutorial"),
-					new MenuItem("Manual"),
+					new MenuItem("Add-on", PBOX.AddOn, "open"),
 					new MenuItem("About", PBOX.About, "open")
 				]));
 				break;

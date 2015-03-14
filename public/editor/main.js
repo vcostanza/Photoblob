@@ -493,8 +493,7 @@ HyperLink = Label.extend({
 		if(this.active) {	
 			// Open href in new tab
 			if(type == "click") {
-				window.open(this.href, "_blank");
-				window.focus();
+				window.open(this.href);
 			} else if(type == "move") {
 				Tooltip.set(this.href, x, y);
 			}
