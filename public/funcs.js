@@ -37,6 +37,10 @@ IMG_NAME = null;
 IMG_SIZE = 0;
 ImageArea = null;
 
+/* Nodes */
+App = null;
+Input = null;
+
 /* Icon sprite sheet */
 ALPHA_BG = null;
 ERROR_IMG = null;
@@ -434,6 +438,10 @@ function StartEditor() {
 	ERROR_IMG = IMG("icons/error.svg");
 	IC_SMALL = IMG("icons/icons_small.svg");
 	
+	// Define nodes
+	Input = E("text-input");
+	App = E("app-container");
+	
 	// Init canvas
 	canvas = E("editor");
 	if(!canvas) return;
@@ -454,14 +462,15 @@ function StartEditor() {
 			
 			document.title = "Photoblob - A Blobware Project";
 			
-			var d = E("app-container"), l = E("loader");
+			var l = E("loader");
 			
-			d.ondragenter = d.ondragover = function(e) {
+			App.ondragenter = App.ondragover = function(e) {
 				e.preventDefault();
 				e.stopPropagation();
 			}
 			
-			d.addEventListener("drop", ReadFiles);
+			// Canvas events
+			App.addEventListener("drop", ReadFiles);
 			canvas.addEventListener("click", MouseDetect);
 			canvas.addEventListener("contextmenu", MouseDetect);	// Right-click
 			canvas.addEventListener("mousemove", MouseDetect);
@@ -470,12 +479,14 @@ function StartEditor() {
 			canvas.addEventListener("mousewheel", MouseDetect);
 			canvas.addEventListener("DOMMouseScroll", MouseDetect);
 			
+			// Input events
 			addEventListener("keydown", Hotkeys);
 			addEventListener("keyup", function(e) {
 				CTRL = e.ctrlKey;
 				SHIFT = e.shiftKey;
 				ALT = e.altKey;
 			});
+			Input.addEventListener("paste", Paste);
 			
 			InitMenus();
 			
@@ -548,7 +559,7 @@ function MouseDetect(event) {
 	} else if(type == "up") MDOWN = false;
 	
 	// Unfocus from text box
-	if(MDOWN && FocusObj) {
+	if(type == "down" && FocusObj) {
 		FocusObj.unfocus();
 		
 	// Cross-platform mouse wheel event
@@ -656,6 +667,26 @@ function Hotkeys(event) {
 		return;
 	}
 	
+	// Special text hotkeys
+	if(FocusObj) {
+		var f = FocusObj;		
+		// Sync input with text box
+		Input.value = f.value;
+		Input.setSelectionRange(MIN(f.sta, f.ind), MAX(f.sta, f.ind));
+		switch(hkStr) {
+			case "ctrl+a":
+				f.sta = 0;
+				f.ind = f.value.length;
+				Update();
+				return;
+			case "ctrl+c": return;
+			case "ctrl+v": return;
+			case "ctrl+x":
+				if(f.sta != f.ind) f.remove(0);
+				return;
+		}
+	}
+	
 	// Read from Hotkeys container
 	if(HK.keys[hkStr]) {
 		
@@ -666,43 +697,13 @@ function Hotkeys(event) {
 		}		
 	}
 	
-	if(hk) {
+	if(hk) {		
 		event.preventDefault();
 		event.stopPropagation();
 	} else {
+		if(CTRL || ALT) return;
 		TypeDetect(event, k);
 	}
-}
-
-/* Set the input object */
-function SetInputFocus(obj) {
-	FocusObj = obj;
-	
-	var input = E("text-input");
-	if(obj == null) {
-		input.value = "";
-		input.blur();
-	} else {
-		input.value = obj.get(true);
-		input.setSelectionRange(obj.ind, obj.ind);
-		input.setAttribute("size", obj.maxlen);
-		input.focus();
-	}
-}
-
-/* Quick-open add-on: check for open request */
-function QuickOpenCheck() {
-	try {
-		var qoi = sessionStorage.getItem("photoblob-quick-open-img");
-		if(qoi) {
-			sessionStorage.removeItem("photoblob-quick-open-img");
-			qoi = JSON.parse(qoi);
-			if(qoi.data && qoi.name && qoi.size) {
-				IMG_SIZE = qoi.size;
-				OpenImage(qoi.data, qoi.name);
-			}
-		}
-	} catch(e) {}
 }
 
 /* Detect regular typing */
@@ -716,32 +717,31 @@ function TypeDetect(event, k) {
 		event.stopPropagation();
 	}
 	
-	var f = FocusObj, v = f.get(true), oldval = v;
+	var f = FocusObj;
 	
 	switch(k.toLowerCase()) {
 		
 		// Delete next char
 		case "del":
 		case "delete":
-			v = v.substring(0, f.ind)+v.substring(f.ind+1);
+			f.remove(f.ind);
 			break;
 			
 		// Delete previous char
 		case "backspace":
-			v = v.substring(0, f.ind-1)+v.substring(f.ind);
-			f.ind = Clamp(f.ind-1, 0, v.length)
+			f.remove(f.ind-1);
 			break;
 			
 		// Move cursor left
 		case "left":
 		case "arrowleft":
-			f.ind = Clamp(f.ind-1, 0, v.length)
+			f.moveCursor(-1);
 			break;
 			
 		// Move cursor right
 		case "right":
 		case "arrowright":
-			f.ind = Clamp(f.ind+1, 0, v.length)
+			f.moveCursor(1);
 			break;
 			
 		// Increment
@@ -749,11 +749,8 @@ function TypeDetect(event, k) {
 		case "down":
 		case "arrowup":
 		case "arrowdown":
-			if(f.numOnly) {
-				var oldval_num = f.get();
-				f.value = Clamp(oldval_num + (k.toLowerCase().indexOf("up") > -1 ? 1 : -1), f.min, f.max);
-				v = f.get(true);
-			}
+			// Call the wheelup/wheeldown event instead of copying code here
+			f.detect(0, 0, "wheel"+k.toLowerCase().replace("arrow", ""));
 			break;
 			
 		// Unfocus text box
@@ -776,7 +773,6 @@ function TypeDetect(event, k) {
 				f.unfocus();
 				f = c[next];
 				SetInputFocus(f);
-				oldval = v = f.get(true);
 			}
 			
 			// Prevent tabbing out of the canvas
@@ -786,23 +782,54 @@ function TypeDetect(event, k) {
 			
 		// Regular typing
 		default:
-			if(k.length == 1) {
-				if(f.numOnly && isNaN(k)) break;
-				v = v.substring(0, f.ind)+k+v.substring(f.ind);
-				f.ind = Clamp(f.ind+1, 0, v.length)
-			}
+			if(k.length == 1) f.addText(k);
 	}
+}
+
+/* Paste event */
+function Paste(event) {
+	var data = event.clipboardData.getData("text/plain"), f = FocusObj;
+	if(data.length > 0 && f)
+		f.addText(data);
+	event.preventDefault();
+	event.stopPropagation();
+}
+
+/* Set the input object */
+function SetInputFocus(obj) {
+	FocusObj = obj;
 	
-	// Clamp string length to maxlen
-	if(f.maxlen > -1 && v.length > f.maxlen) v = v.substring(0, f.maxlen);
+	if(Input == null) return;
 	
-	f.value = v;
-	
-	// Fire change event
-	if(oldval != v) f.onchange(oldval, f.get());
-	
-	Update();
-	
+	if(obj == null) {
+		Input.value = "";
+		Input.blur();
+	} else {
+		
+		// Match position and size of FocusObj so mobile viewport knows where to center
+		Input.style.left = (App.getBoundingClientRect().left+obj.x)+"px";
+		Input.style.top = (App.getBoundingClientRect().top+obj.y)+"px";
+		Input.style.width = obj.w+"px";
+		Input.style.height = obj.h+"px";
+		
+		// Focus for catching paste events and activating mobile keyboard
+		Input.focus();
+	}
+}
+
+/* Quick-open add-on: check for open request */
+function QuickOpenCheck() {
+	try {
+		var qoi = sessionStorage.getItem("photoblob-quick-open-img");
+		if(qoi) {
+			sessionStorage.removeItem("photoblob-quick-open-img");
+			qoi = JSON.parse(qoi);
+			if(qoi.data && qoi.name && qoi.size) {
+				IMG_SIZE = qoi.size;
+				OpenImage(qoi.data, qoi.name);
+			}
+		}
+	} catch(e) {}
 }
 
 /* Return a 1D array of all text object children in a parent object */
@@ -1345,7 +1372,7 @@ function InitMenus() {
 function SetTheme(num) {
 
 	// Most used
-	F1 = "Purisa", C1 = "#DD9", C2 = "#DD6", C3 = "#AA8", WHT = "#FFF", BLK = "#000", GRY = "#666";
+	F1 = "Purisa", C1 = "#DD9", C2 = "#DD6", C3 = "#AA8", C4 = "#FFC",  WHT = "#FFF", BLK = "#000", GRY = "#666";
 
 	switch(num) {
 		
@@ -1410,12 +1437,12 @@ function SetTheme(num) {
 		BG4C = "#5D3B5D", BG5 = "#646", BG6 = "#757", BG7 = "#868"; break;
 		
 		// Delaware theme / Eye strain!
-		case 15: F1 = "WhimsyTT", C1 = "#6FF", C2 = "#3DD", C3 = "#0AA",
+		case 15: F1 = "WhimsyTT", C1 = "#6FF", C2 = "#3DD", C3 = "#0AA", C4 = "#EFF",
 		BG1 = "#440", BG2 = "#550", BG3 = "#660", BG4 = "#771", BG4C = "#727216",
 		BG5 = "#882", BG6 = "#993", BG7 = "#AA4", GRY = "#388"; break;
 		
 		// Black and white high contrast
-		case 16: C1 = "#FFF", C2 = "#DDD", C3 = "#AAA", BG1 = "#000", BG2 = "#060606",
+		case 16: C1 = "#DDD", C2 = "#BBB", C3 = "#999", C4 = "#FFF", BG1 = "#000", BG2 = "#060606",
 		BG3 = "#111", BG4 = "#181818", BG4C = "#222", BG5 = "#292929", BG6 = "#333",
 		BG7 = "#3A3A3A"; break;
 		
@@ -1438,7 +1465,7 @@ function SetTheme(num) {
 	document.body.style.backgroundColor = BG1;
 	
 	// Don't forget the canvas container and background
-	E("app-container").style.background = BG2;
+	App.style.background = BG2;
 	
 	
 	// Update global var

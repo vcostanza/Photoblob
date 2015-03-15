@@ -1844,7 +1844,7 @@ PBOX_About = PBOX_Base.extend({
 		this.name = "Photoblob";
 		this.desc = "Image/Texture Editor and 3D Model Viewer";
 		this.version = "0.1.9";
-		this.update = "Updated 03/13/2015";
+		this.update = "Updated 03/15/2015";
 		this.site = "http://photo.blob.software/";
 		this.copy = "© 2015 Vincent Costanza";
 		

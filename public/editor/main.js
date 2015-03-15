@@ -133,7 +133,7 @@ Menu = Box.extend({
 		}
 		
 		for(i = 0; i < opt.length; i++) {
-			if(opt[i].empty) ctx.fillStyle = GRY; else ctx.fillStyle = C2;
+			ctx.fillStyle = (opt[i].empty ? GRY : (this.highlight == i ? C1 : C2));
 			ctx.fillText(opt[i].name, this.x+5, this.y+(i*20)+20, this.w);
 		}
 		
@@ -366,10 +366,43 @@ TextBox = Box.extend({
 		this.size(w, h);
 		this.value = def;
 		this.numOnly = n;
-		this.min = min, this.max = max;
-		this.parent = parent;
-		this.maxlen = len;
-		this.ind = 0;
+		this.min = min, this.max = max;	// Numeric min and max
+		this.parent = parent;	// Parent object (used for tabbing)
+		this.maxlen = len;	// Maximum amount of characters allowed
+		this.ind = 0;	// End of selection and cursor location
+		this.sta = 0;	// Start of selection
+	},
+	addText: function(str) {
+		
+		str = str.toString();		
+		var max = MAX(this.sta, this.ind), min = MIN(this.sta, this.ind), v = this.get(true), oldval = v, i = min, ml = this.maxlen;
+		if(min != max)
+			v = v.substring(0, min)+v.substring(max);
+		
+		// Set cursor pos
+		this.sta = this.ind = Clamp(min+str.length, 0, (ml ? ml : v.length+str.length));
+		
+		// Append new text
+		if(!(this.numOnly && isNaN(str))) {
+			v = v.substring(0, i)+str+v.substring(i);
+			v = v.substring(0, (ml?ml:v.length));
+		}
+		
+		this.update(v, oldval);
+	},
+	remove: function(ind) {
+		var v = this.get(true), oldval = v;
+		
+		// Only delete highlighted text
+		if(this.ind != this.sta) {
+			this.addText("");
+			
+		// Remove specific index
+		} else if(ind >= 0 && ind < v.length) {			
+			v = v.substring(0, ind)+v.substring(ind+1);
+			this.moveCursor(ind-this.ind);
+			this.update(v, oldval);
+		}		
 	},
 	get: function(asString) {
 		if(this.numOnly) {
@@ -386,6 +419,14 @@ TextBox = Box.extend({
 		}
 		return this.value.toString();
 	},
+	update: function(v, oldval) {
+		this.value = v;
+		
+		if(oldval != v) {
+			this.onchange(oldval, this.get(true));
+			Update();
+		}
+	},
 	unfocus: function() {
 		if(this == FocusObj) {
 			if(this.numOnly && this.get(true) == "") this.value = this.min;	// Set empty number-only text fields to minimum
@@ -396,30 +437,59 @@ TextBox = Box.extend({
 	onchange: function(oldval, newval) {
 		// Override me!
 	},
+	moveCursor: function(pos) {
+		var ind = this.ind;
+		this.sta = this.ind = Clamp(this.ind+pos, 0, this.get(true).length);
+		if(ind != this.ind) Update();
+	},
+	getCursorPos: function(x) {
+		var o = x-this.x, v = this.get(true), ind = v.length, squish, ctx = GC(canvas), c = 0, i = 0;
+		
+		// Setup font and determine 'squish' value
+		ctx.font = (this.h-6)+"px "+F1;
+		squish = Clamp((this.w-8)/ctx.measureText(v).width, 0, 1);
+		
+		// Find closest character
+		for(; i < v.length; i++) {
+			c += ctx.measureText(v[i]).width*squish;
+			if(o <= c) {
+				ind = i;
+				break;
+			}
+		}
+		
+		return ind;
+	},
 	detect: function(x, y, type) {
 		
-		if(type == "click" && !WB(x, y, this)) return;
+		if(type == "down" && !WB(x, y, this)) return;
 		
 		if(WB(x, y, this)) SC("text");
 		
 		switch(type) {
-						
-			case "click":
+		
+			// Select text box
+			case "down":
 				SetInputFocus(this);
-				var ctx = GC(canvas);
-				ctx.font = (this.h-6)+"px "+F1;
-				this.ind = this.get(true).length;
-				
-				var o = x-this.x, v = this.get(true), squish = Clamp((this.w-8)/ctx.measureText(v).width, 0, 1), c = 0, i = 0;
-				
-				for(; i < v.length; i++) {
-					c += ctx.measureText(v[i]).width*squish;
-					if(o <= c) {
-						this.ind = i;
-						break;
+				this.sta = this.ind = this.getCursorPos(x);
+				Update();
+				break;
+			
+			// Move selection cursor
+			case "move":
+				if(MDOWN && WB(x, y, this) && FocusObj == this) {
+					var ind = this.getCursorPos(x);
+					if(ind != this.ind) {
+						this.ind = ind;
+						Update();
 					}
 				}
-				Update();
+				break;
+			
+			// For 'Input' to capture the focus event
+			case "click":
+				if(FocusObj == this)
+					SetInputFocus(this);
 				break;
 			
 			case "wheeldown":
@@ -445,23 +515,34 @@ TextBox = Box.extend({
 		c.fillStyle = BG7;
 		c.fillRect(this.x, this.y, this.w, this.h);
 		
-		// Text
-		c.fillStyle = C1, c.font = (this.h-6)+"px "+F1;
-		c.fillText(this.value, this.x+4, this.y+this.h-4, this.w-8);
+		// Set font
+		c.font = (this.h-6)+"px "+F1;
 		
-		// Selection bar thing
 		if(FocusObj == this) {
 			
 			var v = this.get(true);
+		
+			// Clamp index positions
+			this.ind = Clamp(this.ind, 0, v.length);
+			this.sta = Clamp(this.sta, 0, v.length);
 			
-			var ind_x = c.measureText(v.substring(0, this.ind)).width;
+			var ind_x = c.measureText(v.substring(0, this.ind)).width, sta_x = c.measureText(v.substring(0, this.sta)).width;
 			
-			if(ind_x > this.w) ind_x = (ind_x/c.measureText(v).width)*this.w;
+			// Draw selection mask
+			c.fillStyle = C3;
+			c.fillRect(this.x+(sta_x < ind_x ? sta_x : ind_x)+4, this.y, ABS(ind_x-sta_x), this.h);
 			
+			// Text
+			c.fillStyle = C4;
+			c.fillText(this.value, this.x+4, this.y+this.h-4, this.w-8);
+			
+			// Selection cursor
 			c.fillStyle = BLK;
 			c.fillRect(this.x+ind_x+4, this.y, 2, this.h);
+		} else {
+			c.fillStyle = C1, c.font = (this.h-6)+"px "+F1;
+			c.fillText(this.value, this.x+4, this.y+this.h-4, this.w-8);
 		}
-		
 	}
 });
 
