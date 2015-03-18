@@ -78,21 +78,148 @@ MenuBarItem = Box.extend({
 		this.menu = menu;
 	},
 	draw: function(ctx) {
-		if(MenuBar.highlight == this)
-			ctx.fillStyle = BG6;
-		else
-			ctx.fillStyle = BG5;
+		ctx.save();
+		
+		ctx.fillStyle = (MenuBar.highlight == this ? BG6 : BG5);
 		ctx.fillRect(this.x, this.y, this.w, this.h);
 		
 		ctx.fillStyle = C1, ctx.font = this.t_h+"px "+F1;
 		
-		var t_w = ctx.measureText(this.name).width;
-		
-		if(t_w > this.w) t_w = this.w;
-		
-		ctx.fillText(this.name, this.x+(this.w-t_w)/2, this.y+((this.h-this.t_h)/2)+this.t_h, this.w);
+		ctx.textAlign = "center";
+		ctx.fillText(this.name, this.x+(this.w/2), this.y+(this.t_h/2)+(this.h/2), this.w);
+		ctx.restore();
 	}
 });
+
+/* Top menu bar */
+MenuBar = {
+	x: 0,
+	y: 0,
+	w: 100,
+	h: 30,
+	highlight: null,
+	
+	// Menu items
+	items: [new MenuBarItem("File"), new MenuBarItem("Edit"), new MenuBarItem("Image"), new MenuBarItem("Layer"),
+	new MenuBarItem("Select"), new MenuBarItem("Filter"), new MenuBarItem("View"), new MenuBarItem("Settings"), new MenuBarItem("Help")],
+	
+	// HIT DETECTION
+	detect: function(x, y, type) {
+	
+		var item = null;
+		
+		if(WB(x, y, this)) {
+			for(var i in this.items) {
+				if(WB(x, y, this.items[i])) {
+					item = this.items[i];
+					break;
+				}
+			}
+		}
+		
+		// Menu items
+		if(item) {		
+			if(type == "up") {
+				if(this.menu == item.menu)
+					this.close(item);
+				else
+					this.open(item);
+			}
+				
+			if(type == "move") {
+				if(this.menu)
+					this.open(item);
+				this.setHighlight(item);
+			}
+			return false;
+		} else {
+			this.setHighlight();
+		}
+		
+		// Menu opened
+		if(this.menu) {
+			
+			var menu = this.menu, opts = menu.options;
+			
+			if(WB(x, y, menu) || item) {
+				
+				var m = FLOOR((y-menu.y)/(menu.h/opts.length));
+				
+				if(opts[m] == null) {
+					menu.setHighlight(-1);
+					return false;
+				}
+				
+				// Run function on click
+				if(type == "up") {					
+					// Regular function - caller doesn't matter
+					if(!opts[m].caller) opts[m].func();						
+					// Caller or 'this' matters
+					else opts[m].caller[opts[m].func]();					
+					// Close menu
+					this.close();
+					
+				// Hover highlight
+				} else if(type == "move") {
+					menu.setHighlight(m);
+				}
+				return true;
+			} else {
+				if(type == "up")
+					this.close();
+				else if(type == "move")
+					menu.setHighlight(-1);
+			}
+		}		
+		return false;		
+	},
+	
+	// Menu options
+	menu: null,
+	
+	close: function() {
+		if(this.menu != null) {
+			this.menu.setHighlight(-1);
+			this.menu = null;
+			Update();
+		}
+	},
+	
+	open: function(item) {
+		if(this.menu != item.menu) {
+			this.menu = item.menu;
+			this.menu.set(item.x, item.y+item.h);
+			Update();
+		}
+	},
+	
+	setHighlight: function(h) {
+		if(this.highlight != h) {
+			this.highlight = h;
+			Update();
+		}
+	},
+	
+	draw: function(ctx) {
+		ctx.save();
+		
+		this.w = CWIDTH-this.x;
+		ctx.fillStyle = BG4;
+		RoundRect(ctx, this.x, this.y, this.w, this.h, 10, true, false, true);
+		
+		var i = 0;
+		
+		for(; i < this.items.length; i++) {
+			this.items[i].set(this.x+(95*i)+10, this.y, 90, this.h, 18, this);
+			this.items[i].draw(ctx);
+		}
+		
+		if(this.menu)
+			this.menu.draw(ctx);
+		
+		ctx.restore();
+	}
+};
 
 /* Menu */
 Menu = Box.extend({
@@ -371,6 +498,7 @@ TextBox = Box.extend({
 		this.maxlen = len;	// Maximum amount of characters allowed
 		this.ind = 0;	// End of selection and cursor location
 		this.sta = 0;	// Start of selection
+		this.sub = 0;	// Visual substring where the text starts being drawn
 	},
 	addText: function(str) {
 		
@@ -518,10 +646,9 @@ TextBox = Box.extend({
 		// Set font
 		c.font = (this.h-6)+"px "+F1;
 		
-		if(FocusObj == this) {
-			
-			var v = this.get(true);
+		var v = this.get(true);
 		
+		if(FocusObj == this) {		
 			// Clamp index positions
 			this.ind = Clamp(this.ind, 0, v.length);
 			this.sta = Clamp(this.sta, 0, v.length);
@@ -534,14 +661,14 @@ TextBox = Box.extend({
 			
 			// Text
 			c.fillStyle = C4;
-			c.fillText(this.value, this.x+4, this.y+this.h-4, this.w-8);
+			c.fillText(v, this.x+4, this.y+this.h-4, this.w-8);
 			
 			// Selection cursor
 			c.fillStyle = BLK;
 			c.fillRect(this.x+ind_x+4, this.y, 2, this.h);
 		} else {
-			c.fillStyle = C1, c.font = (this.h-6)+"px "+F1;
-			c.fillText(this.value, this.x+4, this.y+this.h-4, this.w-8);
+			c.fillStyle = C1;
+			c.fillText(v, this.x+4, this.y+this.h-4, this.w-8);
 		}
 	}
 });
@@ -834,6 +961,8 @@ StatusBar = {
 		this.x = EditArea.x;
 		this.y = EditArea.y+EditArea.h+2;
 		
+		ctx.save();
+		
 		ctx.fillStyle = BG4;
 		ctx.fillRect(this.x, this.y, this.w, this.h);
 		
@@ -855,13 +984,14 @@ StatusBar = {
 			ctx.font = "14px "+F1;
 			var imgStr = IMG_NAME+" ["+IMGFX.tw+"x"+IMGFX.th+"]"+(IMG_SIZE > 0 ? " "+ByteString(IMG_SIZE) : ""),
 				fw = this.w-(this.w/8)-z.w-32,
-				tx = this.x+(this.w/8)+16,
-				tw = ctx.measureText(imgStr).width;
+				tx = this.x+(this.w/8)+16;
 			ctx.fillStyle = BG4C;
 			ctx.fillRect(tx, this.y, fw, this.h);
 			ctx.fillStyle = C1;
-			ctx.fillText(imgStr, Clamp(tx+((fw-tw)/2), tx, this.w), this.y+22, fw);
+			ctx.textAlign = "center";
+			ctx.fillText(imgStr, tx+(fw/2), this.y+22, fw);
 		}
+		ctx.restore();
 	}
 };
 
@@ -1435,141 +1565,6 @@ UVMap = {
 	}
 };
 
-/* Menu bar */
-MenuBar = {
-	x: 0,
-	y: 0,
-	w: 100,
-	h: 30,
-	highlight: null,
-	
-	// Menu items
-	items: [new MenuBarItem("File"), new MenuBarItem("Edit"), new MenuBarItem("Image"), new MenuBarItem("Layer"),
-	new MenuBarItem("Select"), new MenuBarItem("Filter"), new MenuBarItem("View"), new MenuBarItem("Settings"), new MenuBarItem("Help")],
-	
-	// HIT DETECTION
-	detect: function(x, y, type) {
-	
-		var item = null;
-		
-		if(WB(x, y, this)) {
-			for(var i in this.items) {
-				if(WB(x, y, this.items[i])) {
-					item = this.items[i];
-					break;
-				}
-			}
-		}
-		
-		// Menu items
-		if(item) {		
-			if(type == "up") {
-				if(this.menu == item.menu)
-					this.close(item);
-				else
-					this.open(item);
-			}
-				
-			if(type == "move") {
-				if(this.menu)
-					this.open(item);
-				this.setHighlight(item);
-			}
-			return false;
-		} else {
-			this.setHighlight();
-		}
-		
-		// Menu opened
-		if(this.menu) {
-			
-			var menu = this.menu, opts = menu.options;
-			
-			if(WB(x, y, menu) || item) {
-				
-				var m = FLOOR((y-menu.y)/(menu.h/opts.length));
-				
-				if(opts[m] == null) {
-					menu.setHighlight(-1);
-					return false;
-				}
-				
-				// Run function on click
-				if(type == "up") {
-					
-					// Regular function - caller doesn't matter
-					if(!opts[m].caller) opts[m].func();
-						
-					// Caller or 'this' matters
-					else opts[m].caller[opts[m].func]();
-					
-					// Close menu
-					this.close();
-					
-				// Hover highlight
-				} else if(type == "move") {
-					menu.setHighlight(m);
-				}
-				return true;
-			} else {
-				if(type == "up")
-					this.close();
-				else if(type == "move")
-					menu.setHighlight(-1);
-			}
-		}
-		
-		return false;
-		
-	},
-	
-	// Menu options
-	menu: null,
-	
-	close: function() {
-		if(this.menu != null) {
-			this.menu.setHighlight(-1);
-			this.menu = null;
-			Update();
-		}
-	},
-	
-	open: function(item) {
-		if(this.menu != item.menu) {
-			this.menu = item.menu;
-			this.menu.set(item.x, item.y+item.h);
-			Update();
-		}
-	},
-	
-	setHighlight: function(h) {
-		if(this.highlight != h) {
-			this.highlight = h;
-			Update();
-		}
-	},
-	
-	draw: function(ctx) {
-		ctx.save();
-		
-		this.w = CWIDTH-this.x;
-		ctx.fillStyle = BG4;
-		RoundRect(ctx, this.x, this.y, this.w, this.h, 10, true, false, true);
-		
-		var i = 0;
-		
-		for(; i < this.items.length; i++) {
-			this.items[i].set(this.x+(95*i)+10, this.y, 90, this.h, 18, this);
-			this.items[i].draw(ctx);
-		}
-		
-		if(this.menu)
-			this.menu.draw(ctx);
-		
-		ctx.restore();
-	}
-};
-
 /* ToolBox */
 ToolBox = {
 	x: 0,
@@ -1852,6 +1847,8 @@ HistoryBox = {
 	w: 0,
 	h: 0,
 	ih: 30,
+	start: 0,
+	length: 0,
 	highlight: -1,
 	
 	setHighlight: function(item) {
@@ -1868,11 +1865,30 @@ HistoryBox = {
 			return;
 		}
 		
-		var l = IMGFX.history.length,
-		item = FLOOR((y-this.y-10)/this.ih)+Clamp(l-FLOOR((this.h-20)/this.ih), 0, l);
+		var w = this.w, h = this.h, ih = this.ih, l = IMGFX.history.length, fit = FLOOR((h-20)/ih), item = FLOOR((y-this.y-10)/ih)+this.start;
+		
+		// Scroll up button
+		if(this.start > 0 && (WC(x, y, this.x+w-ih, this.y+10, ih, ih) || type == "wheelup")) {
+			if(type == "click" || type == "wheelup") {
+				this.start = Clamp(this.start-1, 0, l);				
+				Update();
+			}
+			this.setHighlight(-1);
+			return;
+		}
+		
+		// Scroll down button
+		if(this.start < l-fit && (WC(x, y, this.x+w-ih, this.y+h-10-this.ih, ih, ih) || type == "wheeldown")) {
+			if(type == "click" || type == "wheeldown") {
+				this.start = Clamp(this.start+1, 0, l-1);
+				Update();
+			}			
+			this.setHighlight(-1);
+			return;
+		}
 		
 		if(item > -1 && item < l) {
-			if(type == "up")
+			if(type == "click")
 				IMGFX.LoadHistory(item);
 			else if(type == "move")
 				this.setHighlight(item);
@@ -1887,24 +1903,36 @@ HistoryBox = {
 		this.w = Clamp(CWIDTH-this.x, 0, 195);
 		this.h = (CHEIGHT-this.y)/2;
 		
-		ctx.fillStyle = BG4;
-		RoundRect(ctx, this.x, this.y, this.w, this.h, 10, true, false, true);
+		var x = this.x, y = this.y, w = this.w, h = this.h, ih = this.ih,
+			fit = FLOOR((h-20)/ih), l = IMGFX.history.length, i, j = 0;
+			
+		if(this.length != l) this.start = Clamp(l-fit, 0, l);
+		this.length = l;
 		
-		var	ih = this.ih,
-		fit = FLOOR((this.h-20)/ih),
-		l = IMGFX.history.length,
-		i = Clamp(l-fit, 0, l),
-		j = 0;
+		ctx.fillStyle = BG4;
+		RoundRect(ctx, x, y, w, h, 10, true, false, true);	
 		
 		ctx.font = "18px "+F1;
 		
-		for(; i < l; i++) {
+		// Draw history items
+		for(i = this.start; i < Clamp(this.start+fit, 0, l); i++) {
 			if(this.highlight == i) ctx.fillStyle = BG6;
-			else j % 2 == 0 ? ctx.fillStyle = BG5 : ctx.fillStyle = BG4C;
-			ctx.fillRect(this.x, this.y+10+j*ih, this.w, ih);
-			i <= IMGFX.current ? ctx.fillStyle = C1 : ctx.fillStyle = C3;
-			ctx.fillText(IMGFX.history[i].name, this.x+5, this.y+10+(ih/2+6)+j*ih, this.w);
-			j++;
+			else ctx.fillStyle = (j % 2 == 0 ? BG5 : BG4C);
+			ctx.fillRect(x, y+10+j*ih, w, ih);
+			ctx.fillStyle = (i <= IMGFX.current ? C1 : C3);
+			ctx.fillText(IMGFX.history[i].name, x+5, y+10+(ih/2+6)+j*ih, w);
+			j++
+		}
+		
+		// Draw scroll arrows
+		ctx.fillStyle = BG7;
+		if(this.start > 0) {
+			var up_x = x+w-20, up_y = y+10+(ih/2);
+			DrawTriangle(ctx, up_x-10, up_y+5, up_x+10, up_y+5, up_x, up_y-5, false, true);
+		}
+		if(this.start < l-fit) {
+			var down_x = x+w-20, down_y = y+h-10-(ih/2);			
+			DrawTriangle(ctx, down_x-10, down_y-5, down_x+10, down_y-5, down_x, down_y+5, false, true);
 		}
 		
 		ctx.restore();

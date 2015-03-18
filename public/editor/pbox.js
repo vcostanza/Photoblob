@@ -554,6 +554,28 @@ PBOX_ColorBox = PBOX_Base.extend({
 			new TextBox(this, 80, 24, "FFFFFF", 6, false)
 		];
 		
+		// Hook change events so we can control color with text boxes
+		var par = this;
+		for(var i = 0; i < 3; i++) {
+			this.txt[i].onchange = function(o, n) {
+				var r = par.txt[0].get(), g = par.txt[1].get(), b = par.txt[2].get();
+				par.hsla = RGB2HSL(r, g, b).concat(par.hsla[3]);
+				par.txt[3].value = RGB2HEX(r, g, b);
+				par.recalc(false, true);
+			};
+		}
+		this.txt[3].onchange = function(o, n) {
+			var len = n.length;
+			if(len == 1 || len == 3 || len == 6) {
+				var rgb = HEX2RGB(n);
+				par.txt[0].value = rgb[0];
+				par.txt[1].value = rgb[1];
+				par.txt[2].value = rgb[2];
+				par.hsla = RGB2HSL(rgb).concat(par.hsla[3]);
+				par.recalc(false, true);
+			}
+		};
+		
 		this.cpick = new ImageButton("colorpick", 25, 25);
 		this.picking = false;
 		
@@ -591,8 +613,10 @@ PBOX_ColorBox = PBOX_Base.extend({
 		this.rgba = rgb.concat(this.hsla[3]);
 		
 		if(!noTextUpdate) {
+			this.txt[3].value = "";
 			for(i = 0; i < 3; i++) {
 				this.txt[i].value = this.rgba[i];
+				this.txt[3].value += base16(this.rgba[i], 2);
 			}
 		}
 		
@@ -603,15 +627,6 @@ PBOX_ColorBox = PBOX_Base.extend({
 	},
 	def: function() {
 		this.recalc();
-		
-		// Hook change events so we can control color with text boxes
-		var parent = this;
-		for(var i = 0; i < 4; i++) {
-			this.txt[i].onchange = function(o, n) {
-				parent.hsla = RGB2HSL(parent.txt[0].get(), parent.txt[1].get(), parent.txt[2].get()).concat(parent.hsla[3]);
-				parent.recalc(false, true);
-			};
-		}
 	},
 	apply: function() {
 		// Callback when it's done

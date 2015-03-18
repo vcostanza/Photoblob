@@ -676,7 +676,7 @@ function Hotkeys(event) {
 		switch(hkStr) {
 			case "ctrl+a":
 				f.sta = 0;
-				f.ind = f.value.length;
+				f.ind = f.get(true).length;
 				Update();
 				return;
 			case "ctrl+c": return;
@@ -1002,6 +1002,76 @@ function rgba(r, g, b, a) {
 	return 'rgba('+r+','+g+','+b+','+a+')';
 }
 
+/* Base-10 to Base-16 */
+function base16(num, zeroes) {
+	var b16 = "";
+	while(num > 0)
+	{
+		rem = num % 16;
+		num = FLOOR(num/16);
+		switch(rem) {
+			case 10: rem = 'A'; break;
+			case 11: rem = 'B'; break;
+			case 12: rem = 'C'; break;
+			case 13: rem = 'D'; break;
+			case 14: rem = 'E'; break;
+			case 15: rem = 'F'; break;
+		}
+		b16 = rem+b16;
+	}
+	
+	// Zero padding
+	var len = b16.length, i = 0;
+	if(len < zeroes) {
+		for(; i < zeroes-len; i++) {
+			b16 = 0+b16;
+		}
+	}
+	return b16;
+}
+
+/* Base-16 to Base-10 */
+function base10(b16) {
+	b16 = String(b16);
+	var num = 0, len = b16.length, i = 0, dig = 0;
+	for(; i < len; i++) {
+		dig = b16[i];
+		if(isNaN(dig)) {
+			switch(dig.toUpperCase()) {
+				case 'A': dig = 10; break;
+				case 'B': dig = 11; break;
+				case 'C': dig = 12; break;
+				case 'D': dig = 13; break;
+				case 'E': dig = 14; break;
+				default: dig = 15;
+			}
+		}
+		num += dig*POW(16, len-i-1);
+	}
+	return num;
+}
+
+/* RGB to Hex */
+function RGB2HEX(r, g, b) {
+	if(r instanceof Array) return RGB2HEX(r[0], r[1], r[2]);
+	return base16(r, 2)+base16(g, 2)+base16(b, 2);
+}
+
+/* Hex to RGB */
+function HEX2RGB(h) {
+	var r = 0, g = 0, b = 0, len = h.length;
+	
+	switch(len) {		
+		// 'F' -> 'FFFFFF' -> [255, 255, 255]
+		case 1: r = g = b = base10(h+h); break;
+		// 'F80' -> 'FF8800' -> [255, 136, 0]
+		case 3: r = base10(h[0]+h[0]), g = base10(h[1]+h[1]), b = base10(h[2]+h[2]); break;		
+		// Default syntax
+		case 6: r = base10(h[0]+h[1]), g = base10(h[2]+h[3]), b = base10(h[4]+h[5]); break;
+	}
+	return [r, g, b];
+}
+
 // Get byte length of a string
 // Written by 200_success @ StackOverflow
 function getByteLen(normal_val) {
@@ -1288,7 +1358,7 @@ function InitMenus() {
 					new MenuItem("Open", function() {
 						OpenDialog();
 					}),
-					new MenuItem("Open Link", PBOX.OpenLink, "open"),
+					//new MenuItem("Open Link", PBOX.OpenLink, "open"),
 					new MenuItem("Save", PBOX.Save, "open"),
 					new MenuItem("Close", CloseImage)
 				]));
