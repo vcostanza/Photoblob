@@ -842,6 +842,7 @@ Icons = {
 			case "pencil": x = 8; break;
 			case "text": x = 9; break;
 			case "uvedit": x = 10; break;
+			case "zoom": x = 11; break;
 			case "link": y = 0; break;
 			case "unlink": x = 1, y = 0; break;
 		}
@@ -915,7 +916,7 @@ Tooltip = {
 	},
 	draw: function(ctx) {
 		
-		if(T()-this.lastCall > 5000) this.active = false;
+		if(T()-this.lastCall > 1000) this.active = false;
 		
 		if(this.active) {		
 			ctx.save();
@@ -1030,7 +1031,7 @@ EditArea = {
 			return;
 			
 		// Get image coordinates
-		var icoords = ImageArea.getXY(x, y), ix = icoords[0], iy = icoords[1], iw = IMGFX.tw, ih = IMGFX.th, lx = this.lastX, ly = this.lastY, changed = !(lx == ix && ly == iy);
+		var ia = ImageArea, icoords = ia.getXY(x, y), ix = icoords[0], iy = icoords[1], iw = IMGFX.tw, ih = IMGFX.th, lx = this.lastX, ly = this.lastY, changed = !(lx == ix && ly == iy), sx, sy;
 		
 		if(type == "move") {
 			this.lastX = ix;
@@ -1038,7 +1039,7 @@ EditArea = {
 		}
 	
 		/* Box selection tool */
-		if(tool == "Box Select" && ImageArea.open) {
+		if(tool == "Box Select" && ia.open) {
 			
 			// Clear existing pen path
 			if(this.path.length > 0) {
@@ -1059,7 +1060,8 @@ EditArea = {
 					s.x = Clamp(s.x, 0, iw);
 					s.y = Clamp(s.y, 0, ih);
 					
-					var sx = (x < s.x ? x : s.x), sy = (y < s.y ? y : s.y);
+					sx = (x < s.x ? x : s.x);
+					sy = (y < s.y ? y : s.y);
 					
 					IMGFX.SEL_SetBox(new Selection(sx, sy, ABS(s.x-x), ABS(s.y-y)));
 					this.selecting = false;
@@ -1088,7 +1090,7 @@ EditArea = {
 			SC("crosshair");
 			if(type == "move" && changed) {
 				var ctx = GC(canvas), d = [];
-				if(WB(x, y, ImageArea)) {
+				if(WC(ix, iy, 0, 0, iw, ih)) {
 					d = IMGFX.SampleColor(ix, iy, 1);
 				} else {
 					d = [102, 102, 102, 255];
@@ -1112,7 +1114,7 @@ EditArea = {
 				if(type == "move") Update();
 			}*/
 			
-			if(!WB(x, y, ImageArea) || (type != "down" && type != "up" && type != "move")) return;
+			if(!WC(ix, iy, 0, 0, iw, ih) || (type != "down" && type != "up" && type != "move")) return;
 			
 			if(MDOWN && (type == "down" || type == "move" && changed)) {
 				
@@ -1143,22 +1145,17 @@ EditArea = {
 						}
 					}
 				}
-				
-				// TODO: Get rid of this image update call once a brush overlay scheme is implemented for nice performance increase
-				ImageArea.update();
-				// Basically: Create an overlay canvas that only handles real-time brush drawing
-				// so I don't need to update the canvas and the image area every time
-				
+				ia.update();				
 			} else {
 				if(type == "up") {
 					IMGFX.AddHistory(tool);
-					ImageArea.update();
+					ia.update();
 				}
 			}
 			
 		/* Fill tool */
 		} else if(tool == "Fill") {
-			if(WB(x, y, ImageArea)) {
+			if(WC(ix, iy, 0, 0, iw, ih)) {
 				SC("crosshair");
 				if(type == "up") {
 					IMGFX.Fill(ix, iy, MainColors.fg, 30);
@@ -1167,7 +1164,7 @@ EditArea = {
 			}
 			
 		/* Pen tool (sort of) */
-		} else if(tool == "Pen" && ImageArea.open) {
+		} else if(tool == "Pen" && ia.open) {
 			var p = this.path, i = this.path_last*2;
 			
 			if(type == "up") {
@@ -1193,19 +1190,70 @@ EditArea = {
 			SC("crosshair");
 			
 		/* Grab tool */
-		}/* else if(tool == "Grab" && ImageArea.open) {
+		} else if(tool == "Grab" && ia.open) {
 			SC("grab");
 			
 			if(type == "down") {
-				this.grabX = x;
-				this.grabY = y;
+				if(RCLICK) ia.setOffset(0, 0);
+				this.grabX = x+ia.off_x;
+				this.grabY = y+ia.off_y;
 			}
-			if(MDOWN) {
+			if(LCLICK && MDOWN) {
 				SC("grabbing");
-				ImageArea.setOffset(x-this.grabX, y-this.grabY);
-				Update();
+				ia.setOffset(this.grabX-x, this.grabY-y);
 			}
-		}*/
+			
+		/* Zoom tool */
+		} else if(tool == "Zoom" && ia.open) {
+			
+			if(RCLICK) SC("zoom-out");
+			else SC("zoom-in");
+			
+			var s = this.selectArea;
+			
+			// Zoom to specific area
+			if(this.selecting) {				
+				if(type == "up") {
+					sx = MIN(s.x, ix), ix = MAX(s.x, ix);
+					sy = MIN(s.y, iy), iy = MAX(s.y, iy);
+					
+					// No movement, just zoom in/out
+					if(ix-sx < 10 && iy-sy < 10) {
+						if(RCLICK) ia.setZoom("out");
+						else ia.setZoom("in");
+						this.selecting = false;
+						return;
+					}
+					
+					ia.off_x = FLOOR(sx+((ix-sx)/2)-(iw/2));
+					ia.off_y = FLOOR(sy+((iy-sy)/2)-(ih/2));
+					
+					// Clamp based on aspect ratio
+					if((ix-sx)/(iy-sy) > this.w/this.h)
+						ia.setZoom(ROUND(this.w/(ix-sx)*100)/100);
+					else
+						ia.setZoom(ROUND(this.h/(iy-sy)*100)/100);
+					
+					this.selecting = false;
+					Update();
+				} else if(type == "move") {
+					s.x2 = ix;
+					s.y2 = iy;
+					if(changed) Update();
+				}
+				SC("crosshair");
+			} else if(type == "down") {
+				s.x = s.x2 = ix;
+				s.y = s.x2 = iy;
+				this.selecting = true;
+			}
+			
+			// Scroll wheel zoom (without holding down CTRL)
+			if(type.indexOf("wheel") == 0) {
+				ia.setZoom(type == "wheelup" ? "in" : "out");
+				return;
+			}
+		}
 	},
 	
 	draw: function(ctx) {
@@ -1224,30 +1272,41 @@ ImageArea = {
 	y: 0,
 	w: 0,
 	h: 0,
-	sx: 0,		// Image drawing offset x
-	sy: 0,		// Image drawing offset y
 	off_x: 0,	// Grab offset x
 	off_y: 0,	// Grab offset y
+	lastZoom: "",	// String array of last IMGFX.Zoom parameters (so we don't call it when we don't need to)
 	loaded: false,	// Image area loading/loaded (set to true when image is first opened)
 	open: false,	// Image area open (set to true when image is opened and finished loading)
 	tempimg: null,
 	img: null,
 	
-	// Return the transformed x and y of the image area (after zoom and grab)
+	// Zoom viewport
+	viewport: {
+		x: 0,
+		y: 0,
+		w: 0,
+		h: 0
+	},
+	
+	// Mouse coords -> Image pixel coords
 	getXY: function(x, y) {
-		var e = EditArea, w = IMGFX.tw*ZOOM, h = IMGFX.th*ZOOM, ix = FLOOR((e.w-w)/2+e.x+(this.off_x*ZOOM)), iy = FLOOR((e.h-h)/2+e.y+(this.off_y*ZOOM));
-		
-		return [FLOOR((x-ix)/ZOOM), FLOOR((y-iy)/ZOOM)]
+		var z = ZOOM, e = EditArea, view = this.viewport;
+		return [FLOOR(((x-e.x)/z)+view.x-this.x), FLOOR(((y-e.y)/z)+view.y-this.y)];
+	},
+	
+	// Image pixel coords -> Mouse coords
+	pixToMouseX: function(x) {
+		return FLOOR(EditArea.x+(x-this.viewport.x+this.x)*ZOOM);
+	},	
+	pixToMouseY: function(y) {
+		return FLOOR(EditArea.y+(y-this.viewport.y+this.y)*ZOOM);
 	},
 	
 	// Set the grab offset
 	setOffset: function(x, y) {
-		/*var e = EditArea, w2 = CEIL((IMGFX.tw/2)*ZOOM), h2 = CEIL((IMGFX.th/2)*ZOOM);
-		this.off_x = Clamp(x, e.x-w2, e.x+e.w-w2);
-		this.off_y = Clamp(y, e.y-h2, e.y+e.h-h2);*/
-		this.off_x = x;
-		this.off_y = y;
-		this.update();
+		this.off_x = FLOOR(x);
+		this.off_y = FLOOR(y);
+		this.update(true);
 	},
 	
 	// Set zoom value
@@ -1256,8 +1315,10 @@ ImageArea = {
 			value = ZOOM + (ZOOM >= 1 ? (ZOOM >= 4 ? 1 : 0.5) : 0.1);
 		else if(value == "out")
 			value = ZOOM - (ZOOM > 1 ? (ZOOM >= 4 ? 1 : 0.5) : 0.1);
-		else if(value == "fit")
+		else if(value == "fit") {
 			value = GetScaleToFit(IMGFX.tw, IMGFX.th, EditArea.w, EditArea.h);
+			this.off_x = this.off_y = 0;
+		}
 		
 		value = Clamp(value, 0.05, 16);
 		
@@ -1268,32 +1329,38 @@ ImageArea = {
 	},
 	
 	// Update image area render
-	update: function() {
+	update: function(checkLastZoom) {
 		if(!this.img || IMGFX.speedTesting) return;
 		
-		/* This code is a mess - do something! */
+		var e = EditArea, z = ZOOM, ox = this.off_x, oy = this.off_y, view = this.viewport, w = IMGFX.tw, h = IMGFX.th, x = FLOOR((e.w-w)/2), y = FLOOR((e.h-h)/2);
 		
-		var z = ZOOM, x = this.off_x*z, y = this.off_y*z, e = EditArea, w = IMGFX.tw*z, h = IMGFX.th*z, w2 = CEIL(w/2), h2 = CEIL(h/2), posx = FLOOR((e.w-w)/2+e.x+x), posy = FLOOR((e.h-h)/2+e.y+y),
-			ex = IMGFX.tw, ey = IMGFX.th,
-			sx = Clamp(posx, e.x-w2, e.x+e.w-w2),
-			sy = Clamp(posy, e.y-h2, e.y+e.h-h2);
+		this.x = e.x+x;
+		this.y = e.y+y;
 		
-		if(sx >= e.x) sx = 0; else sx = FLOOR(e.x-sx);
-		if(sy >= e.y) sy = 0; else sy = FLOOR(e.y-sy);
+		view.w = FLOOR(e.w/z);
+		view.h = FLOOR(e.h/z);
+		view.x = FLOOR(e.x+ox+(e.w-view.w)/2);
+		view.y = FLOOR(e.y+oy+(e.h-view.h)/2);
 		
-		if(posx+w > e.x+e.w) ex -= ((e.x+e.w)-(posx+w))/z;
-		if(posy+h > e.y+e.h) ey -= ((e.y+e.h)-(posy+h))/z;
+		var sx = Clamp(view.x-this.x, 0, w), sy = Clamp(view.y-this.y, 0, h), ex = Clamp(view.x+view.w-this.x, 0, w-1)+1, ey = Clamp(view.y+view.h-this.y, 0, h-1)+1, arr = [z, sx, sy, ex, ey].toString();
 		
-		this.sx = sx;
-		this.sy = sy;
+		// Reset grab if the image is off screen
+		if(ex-sx <= 0 || ey-sy <= 0) {
+			this.setOffset(0, 0);
+			return;
+		}
 		
-		IMGFX.Zoom(ZOOM, sx, sy);
+		// Check our last zoom to reduce redudancy
+		if(!(checkLastZoom && this.lastZoom == arr)) {
+			this.lastZoom = arr;
+			IMGFX.Zoom(z, sx, sy, ex, ey);
+		}
 		Update();
 	},
 	draw: function(ctx) {
 		if(!this.loaded) return;
 		
-		var e = EditArea;
+		var e = EditArea, view = this.viewport, z = ZOOM, ox = this.off_x, oy = this.off_y;
 		
 		// Wait for image load then store its data
 		if(!this.img) {
@@ -1316,24 +1383,24 @@ ImageArea = {
 			
 			IMGFX.SetTarget(CloneImg(this.img));
 			IMGFX.AddHistory("Open");
-			if(this.img.width > e.w || this.img.height > e.h) {
+			this.off_x = this.off_y = 0;
+			ZOOM = 0;	// So setZoom calls update
+			if(this.img.width > e.w || this.img.height > e.h)
 				this.setZoom("fit");
-				return;
-			}
-			ZOOM = 1;
+			else
+				this.setZoom(1);
+			return;
 		}
 		
-		var w = IMGFX.tw*ZOOM, h = IMGFX.th*ZOOM, iw = this.w = this.img.width, ih = this.h = this.img.height, iw2 = (iw/2), ih2 = (ih/2), x = FLOOR((e.w-w)/2+e.x+(this.off_x*ZOOM)), y = FLOOR((e.h-h)/2+e.y+(this.off_y*ZOOM));
+		var w = IMGFX.tw, h = IMGFX.th, iw = this.w = this.img.width, ih = this.h = this.img.height,
+			ix = e.x+Clamp((-ox*z)+FLOOR((e.w-iw)/2), 0, e.w-iw), iy = e.y+Clamp((-oy*z)+FLOOR((e.h-ih)/2), 0, e.h-ih);
 		
-		this.x = Clamp(x, e.x, e.x+e.w-iw);
-		this.y = Clamp(y, e.y, e.y+e.h-ih);
-		
-		ctx.putImageData(this.img, this.x, this.y, 0, 0, iw, ih);
+		ctx.putImageData(this.img, ix, iy, 0, 0, iw, ih);
 		
 		// Draw selection mask
 		var sel = IMGFX.selection;
 		if(sel && sel.img) {
-			ctx.drawImage(sel.img[sel.state], x+(sel.x*ZOOM), y+(sel.y*ZOOM), sel.w*ZOOM, sel.h*ZOOM);
+			ctx.drawImage(sel.img[sel.state], this.pixToMouseX(sel.x), this.pixToMouseY(sel.y), sel.w*z, sel.h*z);
 			sel.state = FLOOR(T()/1000) % 2;
 		}
 		
@@ -1343,17 +1410,21 @@ ImageArea = {
 		if(e.selecting) {
 			sel = e.selectArea;
 			ctx.strokeStyle = WHT;
-			ctx.strokeRect(x+(sel.x*ZOOM), y+(sel.y*ZOOM), (sel.x2-sel.x)*ZOOM, (sel.y2-sel.y)*ZOOM);
+			ctx.strokeRect(this.pixToMouseX(sel.x), this.pixToMouseY(sel.y), (sel.x2-sel.x)*z, (sel.y2-sel.y)*z);
 		}
 		
 		// Draw temp path
 		var p = e.path, i = 0;
 		for(; i < p.length-2; i+=2) {
 			ctx.strokeStyle = BLK;
-			DrawLine(ctx, x+(p[i]*ZOOM), y+(p[i+1]*ZOOM), x+(p[i+2]*ZOOM), y+(p[i+3]*ZOOM));
+			DrawLine(ctx, this.pixToMouseX(p[i]), this.pixToMouseY(p[i+1]), this.pixToMouseX(p[i+2]), this.pixToMouseY(p[i+3]));
 			ctx.strokeStyle = WHT;
-			DrawLine(ctx, x+(p[i]*ZOOM)+1, y+(p[i+1]*ZOOM)+1, x+(p[i+2]*ZOOM)+1, y+(p[i+3]*ZOOM)+1);
+			DrawLine(ctx, this.pixToMouseX(p[i])+1, this.pixToMouseY(p[i+1])+1, this.pixToMouseX(p[i+2])+1, this.pixToMouseY(p[i+3])+1);
 		}
+		
+		// DEBUG: Draw viewport
+		//ctx.strokeStyle = WHT;
+		//ctx.strokeRect(view.x, view.y, view.w, view.h);
 	}
 };
 
@@ -1444,7 +1515,7 @@ UVMap = {
 			// Apply UV movement
 			} else {
 			
-				var e = EditArea, su = this.selectedUVs, vw = FLOOR(IMGFX.tw*ZOOM), vh = FLOOR(IMGFX.th*ZOOM), vx = FLOOR((e.w-vw)/2+e.x), vy = FLOOR((e.h-vh)/2+e.y), j = 0, s = false;
+				var e = EditArea, su = this.selectedUVs, vw = FLOOR(IMGFX.tw*ZOOM), vh = FLOOR(IMGFX.th*ZOOM), j = 0, s = false;
 				
 				for(i = 0; i < su.length; i++) {
 					if(su[i] == 1) {
@@ -1511,19 +1582,19 @@ UVMap = {
 		// Draw UV maps
 		if(this.UVs) {
 			
-			var e = EditArea, su = this.selectedUVs, vw = FLOOR(IMGFX.tw*ZOOM), vh = FLOOR(IMGFX.th*ZOOM), vx = FLOOR((e.w-vw)/2+e.x), vy = FLOOR((e.h-vh)/2+e.y), clr = rgba(128, 128, 128, 92), sel = rgba(128, 128, 160, 128),
+			var e = EditArea, ia = ImageArea, w = IMGFX.tw, h = IMGFX.th, su = this.selectedUVs, clr = rgba(128, 128, 128, 92), sel = rgba(128, 128, 160, 128),
 				i = 0, j = 0, k, k2, x = new Float32Array(3), y = new Float32Array(3), v = 0, triSelected = false, allOrNone = false, grad;
 			
 			ctx.lineWidth = 1;
 			ctx.strokeStyle = BLK;
 			ctx.fillStyle = clr;
 			for(; i < this.UVs.length; i += 6) {
-				this.UVxy[i] = x[0] = vx+(this.UVs[i]*vw);
-				this.UVxy[i+1] = y[0] = vy+(this.UVs[i+1]*vh);
-				this.UVxy[i+2] = x[1] = vx+(this.UVs[i+2]*vw);
-				this.UVxy[i+3] = y[1] = vy+(this.UVs[i+3]*vh);
-				this.UVxy[i+4] = x[2] = vx+(this.UVs[i+4]*vw);
-				this.UVxy[i+5] = y[2] = vy+(this.UVs[i+5]*vh);
+				this.UVxy[i] = x[0] = ia.pixToMouseX(this.UVs[i]*w);
+				this.UVxy[i+1] = y[0] = ia.pixToMouseY(this.UVs[i+1]*h);
+				this.UVxy[i+2] = x[1] = ia.pixToMouseX(this.UVs[i+2]*w);
+				this.UVxy[i+3] = y[1] = ia.pixToMouseY(this.UVs[i+3]*h);
+				this.UVxy[i+4] = x[2] = ia.pixToMouseX(this.UVs[i+4]*w);
+				this.UVxy[i+5] = y[2] = ia.pixToMouseY(this.UVs[i+5]*h);
 				
 				// Is entire triangle selected?
 				triSelected = (su[j] && su[j+1] && su[j+2]);
@@ -1577,7 +1648,7 @@ ToolBox = {
 	new Tool("UV Edit", true), new Tool("Color Pick", true), new Tool("Healing Brush"), new Tool("Brush", true),
 	new Tool("Stamp"), new Tool("Pencil", true), new Tool("Erase", true), new Tool("Fill", true),
 	new Tool("Sharpen"), new Tool("Burn"), new Tool("Pen", true), new Tool("Text"),
-	new Tool("Select"), new Tool("Line"), new Tool("Grab"), new Tool("Zoom")],
+	new Tool("Select"), new Tool("Line"), new Tool("Grab", true), new Tool("Zoom", true)],
 	
 	// The active tool
 	active: null,

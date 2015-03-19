@@ -1,4 +1,4 @@
-///// PHOTOBLOB COMPLETE FEATURE LIST ver. 0.1.9 \\\\\
+///// PHOTOBLOB COMPLETE FEATURE LIST ver. 0.2 \\\\\
 
 FILE MENU:
 	New: Create a new image by specifying a width and height (in pixels)
@@ -148,13 +148,9 @@ SETTINGS MENU:
 		- Set to "Black" by default
 		
 HELP MENU:
-	Tutorial: Coming soon
-	
-	Manual: Coming soon
+	Add-on: Shows links to the Firefox Quick-open add-on with source code
 	
 	About: Shows release and licensing info about Photoblob
-
-
 
 TOOLBOX:
 
@@ -195,6 +191,16 @@ TOOLBOX:
 		- Double-click to complete polygon
 		- Inclusive filling on self-intersecting polygons
 		
+	Grab: Move the image area around
+		- Click and hold to drag the image area
+		- Right-click to reset the image area to the center
+		- "Zoom Fit" and "Reset Zoom" will also reset to center
+	
+	Zoom: Zoom in, out, or on a specific location
+		- Left-click to zoom in and right-click to zoom out
+		- Click and drag to zoom into a specific area
+		- Mouse wheel also controls zoom
+		
 COLOR BOX:
 	Foreground Color: The color on the top-left
 		- Default is white
@@ -220,10 +226,13 @@ COLOR CHOOSER:
 	
 	- Color pick button has similar functionality to Color Pick tool
 	
-	- Hex color text input not implemented yet
+	- The Hexadecimal text input allows controlling color using a hex value
 
 HISTORY:
 	- Click a history entry load it into the image area
+	
+	- Scroll arrows will appear on the top and/or bottom of the history panel when there isn't any
+		room to display more items (scroll wheel works here also)
 	
 	- Each history state is named after the change that occured at that time
 	

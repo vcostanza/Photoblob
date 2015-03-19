@@ -1262,22 +1262,21 @@ IMGFX = {
 	
 	/* Zoom - A resize function with no interpolation and less overhead */
 	/* Made specifically for zooming the image area */
-	Zoom: function(amt, sx, sy) {
+	Zoom: function(z, sx, sy, ex, ey) {
 		if(!IMGFX.target) return;
 		
-		var t1 = T(), img = ImageArea.img, amti = 1/amt, d2 = IMGFX.td, w = IMGFX.tw, h = IMGFX.th, new_w = FLOOR(w*amt)-sx, new_h = FLOOR(h*amt)-sy,		
-			dx = Clamp(new_w, 1, EditArea.w), dy = Clamp(new_h, 1, EditArea.h);
+		var t1 = T(), img = ImageArea.img, zi = 1/z, d2 = IMGFX.td, w = IMGFX.tw, h = IMGFX.th, new_w = Clamp(FLOOR((ex-sx)*z), 1, EditArea.w), new_h = Clamp(FLOOR((ey-sy)*z), 1, EditArea.h);
 		
 		// Only create a new image container if we need to
-		if(img.width != dx || img.height != dy) ImageArea.img = ImageData(dx, dy);
+		if(img.width != new_w || img.height != new_h) ImageArea.img = ImageData(new_w, new_h);
 		
-		var d = ImageArea.img.data, pw = w*4, dl = dx*dy*4, i = 0, px = sx, py = sy, s = FLOOR(amti*py)*pw, p;
+		var d = ImageArea.img.data, pw = w*4, dl = new_w*new_h*4, i = 0, px = FLOOR(sx*z), py = FLOOR(sy*z), s = sy*pw, p;
 		
-		dx += sx;
-	
+		new_w += px;
+		
 		for(; i < dl; i += 4) {
 			
-			p = (FLOOR(px*amti)*4)+s;
+			p = (FLOOR(px*zi)*4)+s;
 			
 			d[i] = d2[p];
 			d[i+1] = d2[p+1];
@@ -1285,10 +1284,10 @@ IMGFX = {
 			d[i+3] = d2[p+3];
 			
 			px++;
-			if(px == dx) {
-				px = sx;
+			if(px == new_w) {
+				px = FLOOR(sx*z);
 				py++;
-				s = FLOOR(amti*py)*pw;
+				s = FLOOR(py*zi)*pw;
 			}
 		}
 		

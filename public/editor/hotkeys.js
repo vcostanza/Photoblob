@@ -56,6 +56,7 @@ function DefaultHotkeys() {
 	SetHotkey("ctrl+z", "Undo");
 	SetHotkey("ctrl+=", "ZoomIn");
 	SetHotkey("ctrl+-", "ZoomOut");
+	SetHotkey("ctrl+9", "ZoomFit");
 	SetHotkey("ctrl+0", "ResetZoom");
 	SetHotkey("ctrl+a", "SelectAll");
 	SetHotkey("ctrl+shift+a", "SelectNone");
@@ -107,7 +108,12 @@ function HK_ZoomOut() {
 	ImageArea.setZoom("out");
 }
 
+function HK_ZoomFit() {
+	ImageArea.setZoom("fit");
+}
+
 function HK_ResetZoom() {
+	ImageArea.off_x = ImageArea.off_y = 0;
 	ImageArea.setZoom(1);
 }
 
@@ -138,8 +144,9 @@ HK = {
 		Rotate: new Hotkey(HK_Rotate, "Rotate Image", "Rotate the image 90 degrees clockwise."),
 		InvertColors: new Hotkey(HK_InvertColors, "Invert Colors", "Invert the RGB colors of the image."),
 		View3D: new Hotkey(HK_View3D, "3D View", "Open the 3D View window."),
-		ZoomIn: new Hotkey(HK_ZoomIn, "Zoom In", "Zoom into the image 10% more."),
-		ZoomOut: new Hotkey(HK_ZoomOut, "Zoom Out", "Zoom into the image 10% less."),
+		ZoomIn: new Hotkey(HK_ZoomIn, "Zoom In", "Zoom into the image more."),
+		ZoomOut: new Hotkey(HK_ZoomOut, "Zoom Out", "Zoom into the image less."),
+		ZoomFit: new Hotkey(HK_ZoomFit, "Zoom Fit", "Zoom the image so it fits nicely on the screen."),
 		ResetZoom: new Hotkey(HK_ResetZoom, "Reset Zoom", "Reset zoom to 100%."),
 		SelectAll: new Hotkey(HK_SelectAll, "Select All", "Select entire image or select all UVs."),
 		SelectNone: new Hotkey(HK_SelectNone, "Select None", "Remove selection or select no UVs."),

@@ -1858,8 +1858,8 @@ PBOX_About = PBOX_Base.extend({
 		// Text
 		this.name = "Photoblob";
 		this.desc = "Image/Texture Editor and 3D Model Viewer";
-		this.version = "0.1.9";
-		this.update = "Updated 03/15/2015";
+		this.version = "0.2";
+		this.update = "Updated 03/19/2015";
 		this.site = "http://photo.blob.software/";
 		this.copy = "© 2015 Vincent Costanza";
 		
@@ -1942,7 +1942,6 @@ PBOX = {
 	Save: new PBOX_Save(),
 	Resize: new PBOX_Resize(),
 	ColorBox: new PBOX_ColorBox(),
-	FontBox: new PBOX_FontBox(),
 	Grayscale: new PBOX_Grayscale(),
 	Mirror: new PBOX_Mirror(),
 	InvertColors: new PBOX_InvertColors(),
@@ -1952,6 +1951,7 @@ PBOX = {
 	BoxBlur: new PBOX_BoxBlur(),
 	Shift: new PBOX_Shift(),
 	ChangeHSL: new PBOX_ChangeHSL(),
+	//GradientMap: new PBOX_GradientMap(),
 	ReplaceColor: new PBOX_ReplaceColor(),
 	View3D: new PBOX_View3D(),
 	ChooseTheme: new PBOX_ChooseTheme(),

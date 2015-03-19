@@ -66,7 +66,14 @@ NODE_SERVER = "";
 LOCAL = (window.location.host == "" || window.location.host.indexOf("localhost:") == 0);
 
 // Math function aliases
-ABS = Math.abs, MAX = Math.max, MIN = Math.min, CEIL = Math.ceil, FLOOR = Math.floor, ROUND = Math.round, RND = Math.random, POW = Math.pow, SQRT = Math.sqrt, PI = Math.PI, COS = Math.cos, SIN = Math.sin, HYP = Math.hypot;
+ABS = Math.abs, MAX = Math.max, MIN = Math.min, CEIL = Math.ceil, FLOOR = Math.floor, ROUND = Math.round, RND = Math.random,
+POW = Math.pow, SQRT = Math.sqrt, PI = Math.PI, COS = Math.cos, SIN = Math.sin, HYP = Math.hypot, TRUNC = Math.trunc;
+
+// Compatibility
+if(!TRUNC) TRUNC = function(num) {
+	if(num < 0 && FLOOR(num) < num) return FLOOR(num)+1;
+	return FLOOR(num);
+};
 
 function insert(line, start, l, t) {
 	
@@ -1415,6 +1422,7 @@ function InitMenus() {
 					new MenuItem("3D View", PBOX.View3D, "open"),
 					new MenuItem("Zoom In", HK_ZoomIn),
 					new MenuItem("Zoom Out", HK_ZoomOut),
+					new MenuItem("Zoom Fit", HK_ZoomFit),
 					new MenuItem("Reset Zoom", HK_ResetZoom),
 					new MenuItem("Fullscreen", TFS)
 				]));
