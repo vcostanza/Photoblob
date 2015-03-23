@@ -59,6 +59,7 @@ function DefaultHotkeys() {
 	SetHotkey("ctrl+9", "ZoomFit");
 	SetHotkey("ctrl+0", "ResetZoom");
 	SetHotkey("ctrl+a", "SelectAll");
+	SetHotkey("ctrl+b", "BoxSelect");
 	SetHotkey("ctrl+shift+a", "SelectNone");
 	SetHotkey("ctrl+shift+i", "InvertSelect");
 }
@@ -84,11 +85,17 @@ function HK_Restore() {
 }
 
 function HK_Rotate() {
-	IMGFX.Rotate();
+	if(ToolBox.get() == "UV Edit")
+		UVMap.toggleRotation();
+	else
+		IMGFX.Rotate();
 }
 
 function HK_SaveImage() {
-	PBOX.Save.open();
+	if(ToolBox.get() == "UV Edit")
+		UVMap.toggleScale();
+	else
+		PBOX.Save.open();
 }
 
 function HK_InvertColors() {
@@ -118,15 +125,33 @@ function HK_ResetZoom() {
 }
 
 function HK_SelectAll() {
-	IMGFX.SEL_All();
+	if(ToolBox.get() == "UV Edit")
+		UVMap.select(1);
+	else
+		IMGFX.SEL_All();
 }
 
 function HK_SelectNone() {
-	IMGFX.SEL_Clear();
+	if(ToolBox.get() == "UV Edit")
+		UVMap.select(0);
+	else
+		IMGFX.SEL_Clear();
 }
 
 function HK_InvertSelect() {
-	IMGFX.SEL_Invert();
+	if(ToolBox.get() == "UV Edit")
+		UVMap.select(-1);
+	else
+		IMGFX.SEL_Invert();
+}
+
+function HK_BoxSelect() {
+	if(ToolBox.get() == "UV Edit")
+		UVMap.boxSelect();
+	else {
+		ToolBox.setTool("Box Select", true);
+		EditArea.detect(MouseX, MouseY, "down");
+	}
 }
 
 // Hotkeys object
@@ -135,13 +160,13 @@ HK = {
 	
 	// Tie functions to a name and description
 	funcs: {
-		SaveImage: new Hotkey(HK_SaveImage, "Save Image", "Save and export image."),
+		SaveImage: new Hotkey(HK_SaveImage, "Save/Scale", "Save and export image or scale UVs."),
 		CloseImage: new Hotkey(HK_CloseImage, "Close Image", "Close the currently opened image."),
-		Quit: new Hotkey(HK_Quit, "Quit", "Used to prevent accidently closing the browser with ctrl+q."),
+		Quit: new Hotkey(HK_Quit, "Quit", "Prevent accidently closing the browser with ctrl+q."),
 		Undo: new Hotkey(HK_Undo, "Undo", "Undo a change; step back in history."),
 		Redo: new Hotkey(HK_Redo, "Redo", "Redo a change; step forward in history."),
 		Restore: new Hotkey(HK_Restore, "Restore", "Restore the image to its original state."),
-		Rotate: new Hotkey(HK_Rotate, "Rotate Image", "Rotate the image 90 degrees clockwise."),
+		Rotate: new Hotkey(HK_Rotate, "Rotate", "Rotate the image or rotate selected UVs."),
 		InvertColors: new Hotkey(HK_InvertColors, "Invert Colors", "Invert the RGB colors of the image."),
 		View3D: new Hotkey(HK_View3D, "3D View", "Open the 3D View window."),
 		ZoomIn: new Hotkey(HK_ZoomIn, "Zoom In", "Zoom into the image more."),
@@ -150,7 +175,8 @@ HK = {
 		ResetZoom: new Hotkey(HK_ResetZoom, "Reset Zoom", "Reset zoom to 100%."),
 		SelectAll: new Hotkey(HK_SelectAll, "Select All", "Select entire image or select all UVs."),
 		SelectNone: new Hotkey(HK_SelectNone, "Select None", "Remove selection or select no UVs."),
-		InvertSelect: new Hotkey(HK_InvertSelect, "Invert Select", "Invert the current selection.")
+		InvertSelect: new Hotkey(HK_InvertSelect, "Invert Select", "Invert the current selection."),
+		BoxSelect: new Hotkey(HK_BoxSelect, "Box Select", "Start box selecting.")
 	},
 	
 	// Temporary hotkey input

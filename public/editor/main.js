@@ -1023,15 +1023,36 @@ EditArea = {
 	/* TOOLBOX IMPLEMENTATION */
 	detect: function(x, y, type) {
 	
-		// Get active tool
-		var tool = ToolBox.get();
-	
-		// Check that there is an active tool
-		if(!tool || !WB(x, y, this) || PBOX.open)
+		if(!WB(x, y, this) || PBOX.open)
 			return;
 			
+		// Get active tool
+		var tool = ToolBox.get(), ia = ImageArea;
+			
+		/* Scroll wheel stuff */
+		
+		// Move Up/Down: scroll wheel
+		// Move Left/Right: shift + scroll wheel
+		// Zoom: ctrl + scroll wheel
+		if(type.indexOf("wheel") == 0) {
+			if(type == "wheelup") {
+				if(CTRL) ia.setZoom("in", x, y);
+				else if(SHIFT) ia.setOffset(ia.off_x-(16/ZOOM), ia.off_y);
+				else ia.setOffset(ia.off_x, ia.off_y-(16/ZOOM));				
+			} else if(type == "wheeldown") {
+				if(CTRL) ia.setZoom("out", x, y);
+				else if(SHIFT) ia.setOffset(ia.off_x+(16/ZOOM), ia.off_y);
+				else ia.setOffset(ia.off_x, ia.off_y+(16/ZOOM));
+			}
+		}
+		
+		
+		
+		// Nothing left to do if there's no tool active
+		if(!tool) return;
+		
 		// Get image coordinates
-		var ia = ImageArea, icoords = ia.getXY(x, y), ix = icoords[0], iy = icoords[1], iw = IMGFX.tw, ih = IMGFX.th, lx = this.lastX, ly = this.lastY, changed = !(lx == ix && ly == iy), sx, sy;
+		var icoords = ia.getXY(x, y), ix = icoords[0], iy = icoords[1], iw = IMGFX.tw, ih = IMGFX.th, lx = this.lastX, ly = this.lastY, changed = !(lx == ix && ly == iy), sx, sy;
 		
 		if(type == "move") {
 			this.lastX = ix;
@@ -1075,7 +1096,7 @@ EditArea = {
 				}
 			} else if(type == "down") {
 				s.x = s.x2 = ix;
-				s.y = s.x2 = iy;
+				s.y = s.y2 = iy;
 				this.selecting = true;
 			}
 			SC("crosshair");
@@ -1098,7 +1119,6 @@ EditArea = {
 				MainColors.setFG(d);
 				MainColors.drawInside(ctx);
 			} else if(type == "click") {
-				CL(ix, iy);
 				ToolBox.clear();
 				Update();
 			}
@@ -1157,8 +1177,8 @@ EditArea = {
 		} else if(tool == "Fill") {
 			if(WC(ix, iy, 0, 0, iw, ih)) {
 				SC("crosshair");
-				if(type == "up") {
-					IMGFX.Fill(ix, iy, MainColors.fg, 30);
+				if(type == "click") {
+					IMGFX.Fill(ix, iy, MainColors.fg, 100);
 					IMGFX.AddHistory(tool);
 				}
 			}
@@ -1310,7 +1330,7 @@ ImageArea = {
 	},
 	
 	// Set zoom value
-	setZoom: function(value) {
+	setZoom: function(value, x, y) {
 		if(value == "in")
 			value = ZOOM + (ZOOM >= 1 ? (ZOOM >= 4 ? 1 : 0.5) : 0.1);
 		else if(value == "out")
@@ -1322,7 +1342,7 @@ ImageArea = {
 		
 		value = Clamp(value, 0.05, 16);
 		
-		if(value != ZOOM) {
+		if(value != ZOOM) {			
 			ZOOM = value;
 			this.update();
 		}
@@ -1411,6 +1431,8 @@ ImageArea = {
 			sel = e.selectArea;
 			ctx.strokeStyle = WHT;
 			ctx.strokeRect(this.pixToMouseX(sel.x), this.pixToMouseY(sel.y), (sel.x2-sel.x)*z, (sel.y2-sel.y)*z);
+			ctx.strokeStyle = BLK;
+			ctx.strokeRect(this.pixToMouseX(sel.x)+1, this.pixToMouseY(sel.y)+1, (sel.x2-sel.x)*z-2, (sel.y2-sel.y)*z-2);
 		}
 		
 		// Draw temp path
@@ -1443,7 +1465,7 @@ UVMap = {
 		if(g && g.faceVertexUvs) {
 			var fvu = g.faceVertexUvs, i = 0, j = 0, k = 0;
 			
-			this.UVs = [];
+			this.UVs = [], this.geo = g;
 			
 			// Vertex groups
 			for(; i < fvu.length; i++) {
@@ -1455,15 +1477,16 @@ UVMap = {
 					}
 				}
 			}
-			
-			this.geo = g;
-			
 			// Setup xy coordinate and selection arrays
 			this.UVxy = new Uint16Array(this.UVs.length);
+			this.lastUVs = new Float32Array(this.UVs.length);
 			this.selectedUVs = new Uint8ClampedArray(this.UVs.length/2);
 			
+			// Save UVs for real-time editing
+			this.saveLast();
+			
 			// Set UV editing on
-			if(ToolBox.get() != "UV Edit") ToolBox.setTool("UV Edit");
+			ToolBox.setTool("UV Edit", true);
 			
 			Update();
 		}
@@ -1471,18 +1494,89 @@ UVMap = {
 	clearUVs: function() {
 		delete this.UVs;
 		delete this.UVxy;
+		delete this.lastUVs;
 		delete this.selectedUVs;
 		if(ToolBox.get() == "UV Edit") ToolBox.clear();
 	},
-	selectAll: function() {
-		if(this.UVs) {
-			this.selectedUVs.fill(1);
+	updateUVs: function() {
+		if(this.geo) {
+			var fvu = this.geo.faceVertexUvs, i = 0, j = 0, k = 0, v = 0;
+			
+			// Sync model UV data with UVMap data
+			for(i = 0; i < fvu.length; i++) {
+				for(j = 0; j < fvu[i].length; j++) {
+					for(k = 0; k < 3; k++) {
+						fvu[i][j][k].x = this.UVs[v];
+						fvu[i][j][k].y = 1-this.UVs[v+1];
+						v += 2;
+					}
+				}
+			}			
+			this.geo.uvsNeedUpdate = true;
 			Update();
 		}
 	},
-	selectNone: function() {
+	
+	// Select all (1), none(0), or inverse(-1)
+	select: function(type) {
 		if(this.UVs) {
-			this.selectedUVs.fill(0);
+			type = (type > 0 ? type = 1 : type);
+			var i = 0, su = this.selectedUVs;
+			for(; i < su.length; i++) {
+				su[i] = (type < 0 ? 1-su[i] : type);
+			}
+			Update();
+		}
+	},
+	
+	// Get centroid of selected UVs
+	centroid: function() {
+		var uv = this.lastUVs, su = this.selectedUVs, minX = Infinity, maxX = -Infinity, minY = minX, maxY = maxX, i = 0, j = 0;
+		
+		for(; i < su.length; i++) {
+			if(su[i]) {
+				minX = (uv[j] < minX ? uv[j] : minX);
+				minY = (uv[j+1] < minY ? uv[j+1] : minY);
+				maxX = (uv[j] > maxX ? uv[j] : maxX);
+				maxY = (uv[j+1] > maxY ? uv[j+1] : maxY);
+			}
+			j += 2;
+		}
+		return [(minX+maxX)/2, (minY+maxY)/2];
+	},
+	
+	// Rotate UV selection
+	rotate: function(rad) {
+		if(this.UVs) {
+			var uv = this.lastUVs, su = this.selectedUVs, c = COS(rad), s = SIN(rad), cen = this.centroid(), x, y, i = 0, j = 0;
+						
+			// Apply rotation based on centroid
+			for(; i < su.length; i++) {
+				if(su[i]) {
+					x = (uv[j]-cen[0]), y = (uv[j+1]-cen[1]);
+					this.UVs[j] = cen[0]+((x*c)-(y*s));
+					this.UVs[j+1] = cen[1]+((y*c)+(x*s));
+				}
+				j += 2;
+			}			
+			Update();
+		}
+	},
+	
+	// Scale UV selection
+	scale: function(w, h) {		
+		if(this.UVs) {
+			var uv = this.lastUVs, su = this.selectedUVs, cen = this.centroid(), x, y, i = 0, j = 0;
+						
+			// Apply scale based on centroid
+			for(; i < su.length; i++) {
+				if(su[i]) {
+					x = (uv[j]-cen[0]), y = (uv[j+1]-cen[1]);
+					this.UVs[j] = cen[0]+(w*x);
+					this.UVs[j+1] = cen[1]+(h*y);
+				}
+				j += 2;
+			}			
 			Update();
 		}
 	},
@@ -1490,11 +1584,125 @@ UVMap = {
 	// Detect specific vars
 	downX: 0,
 	downY: 0,
+	rotating: false,
+	scaling: false,
+	selecting: false,
+	startDist: 0,
 	lastUVs: null,
+	
+	// Save UV positions to buffer so we have a basis for transforms
+	saveLast: function() {
+		for(var i = 0; i < this.UVs.length; i++) {
+			this.lastUVs[i] = this.UVs[i];
+		}
+	},
+	
+	// Begin/end rotating (called by Rotate hotkey)
+	toggleRotation: function() {
+		if(this.scaling || this.selecting) return;
+		
+		if(this.rotating) {
+			this.updateUVs();
+		} else {
+			this.saveLast();
+			
+			var cen = this.centroid(), ic = [FLOOR(cen[0]*IMGFX.tw), FLOOR(cen[1]*IMGFX.th)],
+				diffX = MouseX-ImageArea.pixToMouseX(ic[0]), diffY = MouseY-ImageArea.pixToMouseY(ic[1]);
+			
+			this.downX = ic[0];
+			this.downY = ic[1];			
+			this.startDist = -Math.atan(diffX/diffY)-(diffY>0?PI:0);
+		}
+		this.rotating = !this.rotating;
+	},
+	
+	// Begin/end scaling
+	toggleScale: function() {
+		if(this.rotating || this.selecting) return;
+		
+		if(this.scaling) {
+			this.updateUVs();
+		} else {
+			this.saveLast();
+			
+			var cen = this.centroid(), ic = [FLOOR(cen[0]*IMGFX.tw), FLOOR(cen[1]*IMGFX.th)],
+				diffX = MouseX-ImageArea.pixToMouseX(ic[0]),
+				diffY = MouseY-ImageArea.pixToMouseY(ic[1]);
+			
+			this.downX = ic[0];
+			this.downY = ic[1];
+			this.startDist = [diffX, diffY];
+		}
+		this.scaling = !this.scaling;
+	},
+	
+	// Begin box select
+	boxSelect: function() {
+		if(this.rotating || this.scaling) return;
+		
+		var ic = ImageArea.getXY(MouseX, MouseY);
+		
+		// End selection
+		if(this.selecting && this.UVs) {
+			var uv = this.UVs, w = IMGFX.tw, h = IMGFX.th, minX = MIN(ic[0], this.downX)/w, maxX = MAX(ic[0], this.downX)/w-minX,
+				minY = MIN(ic[1], this.downY)/h, maxY = MAX(ic[1], this.downY)/h-minY, i = 0, j = 0;
+			
+			for(; i < uv.length; i+=2) {
+				if(WC(uv[i], uv[i+1], minX, minY, maxX, maxY))
+					this.selectedUVs[j] = 1;
+				j++;
+			}
+			Update();
+			
+		// Begin selection
+		} else {
+			this.downX = ic[0];
+			this.downY = ic[1];
+		}
+		this.selecting = !this.selecting;
+	},
 	
 	detect: function(x, y, type) {
 		
 		if(!this.UVs || !WB(x, y, EditArea)) return;
+		
+		SC("crosshair");
+		
+		// Apply rotation
+		if(this.rotating) {
+			if(type == "move") {
+				var diffX = x-ImageArea.pixToMouseX(this.downX), diffY = y-ImageArea.pixToMouseY(this.downY), rad = -Math.atan(diffX/diffY)-(diffY>0?PI:0)-this.startDist;
+				
+				// Snap to 45 degree increments when shift is pressed
+				if(SHIFT) rad = ROUND(rad*(4/PI))*(PI/4);
+				
+				this.rotate(rad);
+			} else if(type == "up")
+				this.toggleRotation();
+			return;
+		}
+		
+		// Apply scale
+		if(this.scaling) {
+			if(type == "move") {
+				var diffX = x-ImageArea.pixToMouseX(this.downX), diffY = y-ImageArea.pixToMouseY(this.downY),
+					scaleW = diffX/this.startDist[0], scaleH = diffY/this.startDist[1];
+				
+				// Preserve proportions when shift is pressed
+				if(SHIFT) scaleW = scaleH = HYP(diffX, diffY)/HYP(this.startDist[0], this.startDist[1]);
+				
+				this.scale(scaleW, scaleH);
+			} else if(type == "up")
+				this.toggleScale();
+			return;
+		}
+		
+		// Manage box selection
+		if(this.selecting) {
+			if(type == "move") Update();
+			else if(type == "up") this.boxSelect();
+			return;
+		}
 		
 		var i = 0;
 		
@@ -1503,14 +1711,11 @@ UVMap = {
 			
 			// Save original mouse and UV positions
 			if(type == "down") {
-				downX = x;
-				downY = y;
+				this.downX = x;
+				this.downY = y;
 				
-				if(!this.lastUVs || this.lastUVs.length != this.UVs.length)
-					this.lastUVs = new Float32Array(this.UVs.length);
-				for(; i < this.UVs.length; i++) {
-					this.lastUVs[i] = this.UVs[i];
-				}
+				// Save UVs to lastUVs buffer
+				this.saveLast();
 				
 			// Apply UV movement
 			} else {
@@ -1519,8 +1724,8 @@ UVMap = {
 				
 				for(i = 0; i < su.length; i++) {
 					if(su[i] == 1) {
-						this.UVs[j] = this.lastUVs[j]+((x-downX)/vw);
-						this.UVs[j+1] = this.lastUVs[j+1]+((y-downY)/vh);
+						this.UVs[j] = this.lastUVs[j]+((x-this.downX)/vw);
+						this.UVs[j+1] = this.lastUVs[j+1]+((y-this.downY)/vh);
 						s = true;
 					}
 					j += 2;
@@ -1528,22 +1733,7 @@ UVMap = {
 				
 				// Update model UVs
 				if(type == "up") {
-					if(this.geo) {
-						var fvu = this.geo.faceVertexUvs, k = 0, v = 0;
-						
-						for(i = 0; i < fvu.length; i++) {
-							for(j = 0; j < fvu[i].length; j++) {
-								for(k = 0; k < 3; k++) {
-									fvu[i][j][k].x = this.UVs[v];
-									fvu[i][j][k].y = 1-this.UVs[v+1];
-									v += 2;
-								}
-							}
-						}
-						
-						this.geo.uvsNeedUpdate = true;
-						Update();
-					}
+					this.updateUVs();
 				}
 				
 				if(s) Update();
@@ -1557,8 +1747,8 @@ UVMap = {
 			
 			//this.UVdots = [];
 			
-			if(!SHIFT) su.fill(0);
-			for(; i < this.UVxy.length; i += 2) {
+			if(!SHIFT) this.select(0);
+			for(i = 0; i < this.UVxy.length; i += 2) {
 				
 				rad = HYP(this.UVxy[i]-x, this.UVxy[i+1]-y);
 				
@@ -1584,6 +1774,8 @@ UVMap = {
 			
 			var e = EditArea, ia = ImageArea, w = IMGFX.tw, h = IMGFX.th, su = this.selectedUVs, clr = rgba(128, 128, 128, 92), sel = rgba(128, 128, 160, 128),
 				i = 0, j = 0, k, k2, x = new Float32Array(3), y = new Float32Array(3), v = 0, triSelected = false, allOrNone = false, grad;
+			
+			ctx.save();
 			
 			ctx.lineWidth = 1;
 			ctx.strokeStyle = BLK;
@@ -1621,6 +1813,7 @@ UVMap = {
 				ctx.lineTo(x[1], y[1]);
 				ctx.lineTo(x[2], y[2]);
 				ctx.lineTo(x[0], y[0]);
+				
 				// Only stroke triangle if all verts are selected or deselected
 				if(allOrNone) {
 					ctx.strokeStyle = (triSelected ? WHT : BLK);
@@ -1630,8 +1823,25 @@ UVMap = {
 				ctx.fill();				
 				ctx.closePath();
 				
-				j += 3;			
+				j += 3;
 			}
+			
+			// Draw transform line
+			if(this.rotating || this.scaling) {
+				ctx.strokeStyle = BLK;
+				DrawLine(ctx, MouseX, MouseY, ia.pixToMouseX(this.downX), ia.pixToMouseY(this.downY));
+				ctx.strokeStyle = WHT;
+				DrawLine(ctx, MouseX+1, MouseY+1, ia.pixToMouseX(this.downX)+1, ia.pixToMouseY(this.downY)+1);
+				
+			// Draw selection box
+			} else if(this.selecting) {
+				ctx.strokeStyle = BLK;
+				ctx.strokeRect(MouseX, MouseY, ia.pixToMouseX(this.downX)-MouseX, ia.pixToMouseY(this.downY)-MouseY);
+				ctx.strokeStyle = WHT;
+				ctx.strokeRect(MouseX+1, MouseY+1, ia.pixToMouseX(this.downX)-MouseX-2, ia.pixToMouseY(this.downY)-MouseY-2);
+			}
+			
+			ctx.restore();
 		}
 	}
 };
@@ -1648,7 +1858,7 @@ ToolBox = {
 	new Tool("UV Edit", true), new Tool("Color Pick", true), new Tool("Healing Brush"), new Tool("Brush", true),
 	new Tool("Stamp"), new Tool("Pencil", true), new Tool("Erase", true), new Tool("Fill", true),
 	new Tool("Sharpen"), new Tool("Burn"), new Tool("Pen", true), new Tool("Text"),
-	new Tool("Select"), new Tool("Line"), new Tool("Grab", true), new Tool("Zoom", true)],
+	new Tool("Grab", true), new Tool("Zoom", true)],
 	
 	// The active tool
 	active: null,
@@ -1675,7 +1885,7 @@ ToolBox = {
 	},
 	
 	// Set the active tool
-	setTool: function(t) {
+	setTool: function(t, noToggle) {
 		
 		// Convert tool name to object
 		if(typeof(t) == "string") {
@@ -1688,7 +1898,7 @@ ToolBox = {
 			if(typeof(t) == "string") t = null;
 		}
 		
-		if(t && this.active != t) {
+		if(t && (noToggle || this.active != t)) {
 			if(t.name == "Brush" || t.name == "Erase") {
 				t.data = Brushes.get(1, 50);
 			}

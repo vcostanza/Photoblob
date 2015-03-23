@@ -163,7 +163,9 @@ TOOLBOX:
 	UV Edit: Enter UV editing mode
 		- UVs can be selected with left-click and moved by holding right-click and moving
 		- Hold shift and left-click to select multiple UVs
-		- More options to come
+		- CTRL + B to box select UVs
+		- CTRL + R to rotate selected UVs
+		- CTRL + S to scale selected UVs		
 		
 	Color Pick: Set the foreground color based on the image pixel at mouse position
 		- Click to set color
@@ -184,7 +186,6 @@ TOOLBOX:
 		
 	Fill: Fill an image area based on color
 		- Fill color is based on foreground color
-		- Bug: May cause recursion overflow if the fill area is too "complicated"
 		
 	Pen: Create a polygon selection on the image
 		- Click to start and add point in polygon
@@ -195,11 +196,12 @@ TOOLBOX:
 		- Click and hold to drag the image area
 		- Right-click to reset the image area to the center
 		- "Zoom Fit" and "Reset Zoom" will also reset to center
+		- SHIFT + scroll wheel moves up/down and ALT + scroll wheel moves left/right
 	
 	Zoom: Zoom in, out, or on a specific location
 		- Left-click to zoom in and right-click to zoom out
 		- Click and drag to zoom into a specific area
-		- Mouse wheel also controls zoom
+		- CTRL + scroll wheel also controls zoom
 		
 COLOR BOX:
 	Foreground Color: The color on the top-left

@@ -1489,7 +1489,7 @@ IMGFX = {
 	},
 	 
 	/* Fill tool */
-	// TODO: Bypass the "Too much recursion" error, only seems to occur during large maze tests
+	// TODO: Make this cleaner
 	Fill: function(x, y, col, tol) {
 		if(!IMGFX.target) return;
 	
@@ -1497,7 +1497,7 @@ IMGFX = {
 		
 		if(!last) return;
 		
-		var d2 = last.img.data, dl = w*h, dl4 = dl*4, s = (x+(y*w))*4, filled = new Uint8ClampedArray(dl), sc = [d2[s], d2[s+1], d2[s+2]], scsum = sc[0]+sc[1]+sc[2],
+		var d2 = last.img.data, dl = w*h, dl4 = dl*4, s = (x+(y*w))*4, filled = new Uint8ClampedArray(dl), sc = [d2[s], d2[s+1], d2[s+2]], scsum = sc[0]+sc[1]+sc[2], recurs = [],
 		
 		// Returns tolerance of a pixel
 		getTol = function(p) {
@@ -1537,8 +1537,7 @@ IMGFX = {
 						above = i-pw;
 					} else {
 						if(above != null) {
-							fillSegment(above);
-							//fillDot(above, 0);
+							try{fillSegment(above);}catch(e){recurs.push(above);}
 							above = null;
 						}
 					}
@@ -1548,8 +1547,7 @@ IMGFX = {
 						below = i+pw;
 					} else {
 						if(below != null) {
-							fillSegment(below);
-							//fillDot(below, 0);
+							try{fillSegment(below);}catch(e){recurs.push(below);}
 							below = null;
 						}
 					}
@@ -1562,8 +1560,7 @@ IMGFX = {
 						above = i-4;
 					} else {
 						if(above != null) {
-							fillSegment(above);
-							//fillDot(above, 0);
+							try{fillSegment(above);}catch(e){recurs.push(above);}
 							above = null;
 						}
 					}
@@ -1573,8 +1570,7 @@ IMGFX = {
 						below = i+4;
 					} else {
 						if(below != null) {
-							fillSegment(below);
-							//fillDot(below, 0);
+							try{fillSegment(below);}catch(e){recurs.push(below);}
 							below = null;
 						}
 					}
@@ -1605,6 +1601,11 @@ IMGFX = {
 		}
 		
 		fillSegment(s);
+		
+		// Fill in the spots we couldn't reach because of recursion
+		for(var r = 0; r < recurs.length; r++) {
+			fillSegment(recurs[r]);
+		}
 		
 		//CL("Fill("+x+", "+y+", "+col+", "+tol+"): "+(T()-t1));
 		

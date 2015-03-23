@@ -15,8 +15,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Objects */
-FileDialog = UploadForm = undefined;
+/* Objects and Nodes */
+FileDialog = FocusObj = ImageArea = App = Input = null;
 
 // Style
 F1 = C1 = C2 = C3 = BG1 = BG2 = BG3 = BG4 = BG4C = BG5 = BG6 = BG7 = WHT = "#FFF";
@@ -31,15 +31,11 @@ Cursor = "auto";
 MouseX = MouseY = LastMouseX = LastMouseY = -1;
 LastUpdate = 0;
 Frame = 0;
-FocusObj = null;
+
 ZOOM = 1;
 IMG_NAME = null;
 IMG_SIZE = 0;
 ImageArea = null;
-
-/* Nodes */
-App = null;
-Input = null;
 
 /* Icon sprite sheet */
 ALPHA_BG = null;
@@ -70,6 +66,7 @@ ABS = Math.abs, MAX = Math.max, MIN = Math.min, CEIL = Math.ceil, FLOOR = Math.f
 POW = Math.pow, SQRT = Math.sqrt, PI = Math.PI, COS = Math.cos, SIN = Math.sin, HYP = Math.hypot, TRUNC = Math.trunc;
 
 // Compatibility
+if(!HYP) HYP = function(w, h) {return SQRT(w*w+h*h);};
 if(!TRUNC) TRUNC = function(num) {
 	if(num < 0 && FLOOR(num) < num) return FLOOR(num)+1;
 	return FLOOR(num);
@@ -204,8 +201,7 @@ function Lerp2D(x1, y1, x2, y2) {
 	}
 	
 	// Increment
-	while(b < lineSize) {
-		
+	while(b < lineSize) {		
 		// Next point
 		if(t) {
 			buf[b] = y+sx
@@ -213,18 +209,14 @@ function Lerp2D(x1, y1, x2, y2) {
 		} else {
 			buf[b] = x+sx;
 			buf[b+1] = y+sy;
-		}
-		
-		x++;
-		
+		}		
+		x++;		
 		if(p < 0) {
 			p += twoDy;
 		} else {
 			y += yinc;
 			p += twoDyMinusDx;
 		}
-		
-		
 		b += 2;
 	}
 	
@@ -261,6 +253,12 @@ function GetBase64Mime(data) {
 /* Convert bytes to KB, MB, etc. */
 function ByteString(b) {
 	return b >= 1000 ? (b >= 1000000 ? ROUND((b/1000000)*10)/10 + " MB" : ROUND((b/1000)*10)/10 + " KB") : b+" B"
+}
+
+/* Event prevention shim */
+function StopEvent(e) {
+	e.preventDefault();
+	e.stopPropagation();
 }
 
 /* Go fullscreen */
@@ -431,8 +429,7 @@ function ReadFiles(e) {
 	
 	xhr.send(form);*/
 	
-	e.preventDefault();
-	e.stopPropagation();
+	StopEvent(e);
 }
 
 /* Start up the editor */
@@ -471,10 +468,7 @@ function StartEditor() {
 			
 			var l = E("loader");
 			
-			App.ondragenter = App.ondragover = function(e) {
-				e.preventDefault();
-				e.stopPropagation();
-			}
+			App.ondragenter = App.ondragover = StopEvent;
 			
 			// Canvas events
 			App.addEventListener("drop", ReadFiles);
@@ -489,6 +483,9 @@ function StartEditor() {
 			// Input events
 			addEventListener("keydown", Hotkeys);
 			addEventListener("keyup", function(e) {
+				// Stop Firefox menu bar from popping up
+				//if(ALT && !e.altKey) StopEvent(e);
+				
 				CTRL = e.ctrlKey;
 				SHIFT = e.shiftKey;
 				ALT = e.altKey;
@@ -522,16 +519,16 @@ function Update() {
 }
 
 /* Detect mouse events */
-function MouseDetect(event) {
+function MouseDetect(e) {
 	
-	var t = event.target,
+	var t = e.target,
 	
 		// This is the best cross-browser method of getting canvas coords
-		x = FLOOR(event.clientX-t.getBoundingClientRect().left),
-		y = FLOOR(event.clientY-t.getBoundingClientRect().top),
+		x = FLOOR(e.clientX-t.getBoundingClientRect().left),
+		y = FLOOR(e.clientY-t.getBoundingClientRect().top),
 		
 		// Type (without "mouse" before it)
-		type = (event.type.indexOf("Scroll") > -1 ? "wheel" :  event.type.replace("mouse", ""));
+		type = (e.type.indexOf("Scroll") > -1 ? "wheel" :  e.type.replace("mouse", ""));
 	
 	// Used for interpolating movement
 	if(type == "move") {
@@ -543,22 +540,20 @@ function MouseDetect(event) {
 	
 	// Stop click events here, passing them to the detections is redudant
 	if(type == "contextmenu") {
-		event.preventDefault();
-		event.stopPropagation();
+		StopEvent(e);
 		return;
 	} else if(type == "click") {
 		if(CTRL && ALT) {
 			OpenDialog();
 			CTRL = ALT = false;
+			return;
 		}
-		// I would return here since "up" and "click" are almost interchangable
-		// But I need to send click for "protected" events like window.open (used in HyperLink)
 	}
 	
 	// Mouse down
 	if(type == "down") {
 		MDOWN = true;
-		switch(event.button) {
+		switch(e.button) {
 			case 0: LCLICK = true; break;
 			case 1: MIDCLICK = true; break;
 			case 2: RCLICK = true; break;
@@ -571,17 +566,8 @@ function MouseDetect(event) {
 		
 	// Cross-platform mouse wheel event
 	} else if(type == "wheel") {
-		if(event.detail) type = event.detail > 0 ? "wheeldown" : "wheelup";
-		else if(event.wheelDelta) type = event.wheelDelta > 0 ? "wheelup" : "wheeldown";
-	}
-	
-	// Zoom with ctrl + scroll wheel
-	if(CTRL && type.indexOf("wheel") == 0) {
-		if(type == "wheelup") ImageArea.setZoom("in");
-		else if(type == "wheeldown") ImageArea.setZoom("out");
-		event.preventDefault();
-		event.stopPropagation();
-		return;
+		if(e.detail) type = e.detail > 0 ? "wheeldown" : "wheelup";
+		else if(e.wheelDelta) type = e.wheelDelta > 0 ? "wheelup" : "wheeldown";
 	}
 	
 	// Detect for all layers
@@ -592,12 +578,15 @@ function MouseDetect(event) {
 			HistoryBox.detect(x, y, type);
 			EditArea.detect(x, y, type);
 			StatusBar.detect(x, y, type);
+			
+			// Prevent scroll wheel default events
+			if(type.indexOf("wheel") == 0) StopEvent(e);
 		}
 	}
 	
 	// Mouse up
 	if(type == "up") {
-		switch(event.button) {
+		switch(e.button) {
 			case 0: LCLICK = false; break;
 			case 1: MIDCLICK = false; break;
 			case 2: RCLICK = false; break;
@@ -611,19 +600,19 @@ function MouseDetect(event) {
 }
 
 /* Detect keyboard events */
-function Hotkeys(event) {
-	var ct = CTRL = event.ctrlKey, k = event.key, sh = SHIFT = event.shiftKey, alt = ALT = event.altKey, hk = false;
+function Hotkeys(e) {
+	var ct = CTRL = e.ctrlKey, k = e.key, sh = SHIFT = e.shiftKey, alt = ALT = e.altKey, hk = false;
 	
 	// Legacy
 	if(k == null) {
 		
-		var kc = event.keyCode;
+		var kc = e.keyCode;
 		
 		if(kc >= 112 && kc <= 123) {
 			k = "f"+(kc-111);
 		}
 		
-		switch(event.keyCode) {
+		switch(e.keyCode) {
 			case 8: k = "backspace"; break;
 			case 9: k = "tab"; break;
 			case 12: k = "unidentified"; break;
@@ -649,7 +638,7 @@ function Hotkeys(event) {
 			case 187: k = "="; break;
 			case 189: k = "-"; break;
 			default:
-				k = String.fromCharCode(event.keyCode);
+				k = String.fromCharCode(e.keyCode);
 				k = (sh?k.toUpperCase():k.toLowerCase());
 				break;
 		}
@@ -669,8 +658,7 @@ function Hotkeys(event) {
 		
 		HK.tempKey = hkStr;
 		Update();
-		event.preventDefault();
-		event.stopPropagation();
+		StopEvent(e);
 		return;
 	}
 	
@@ -705,24 +693,20 @@ function Hotkeys(event) {
 	}
 	
 	if(hk) {		
-		event.preventDefault();
-		event.stopPropagation();
+		StopEvent(e);
 	} else {
 		if(CTRL || ALT) return;
-		TypeDetect(event, k);
+		TypeDetect(e, k);
 	}
 }
 
 /* Detect regular typing */
-function TypeDetect(event, k) {
+function TypeDetect(e, k) {
 	
 	if(!FocusObj) return;
 	
-	// Disable annoying Firefox quick find
-	if(k == "/") {
-		event.preventDefault();
-		event.stopPropagation();
-	}
+	// Disable Firefox quick find
+	if(k == "/") StopEvent(e);
 	
 	var f = FocusObj;
 	
@@ -783,8 +767,7 @@ function TypeDetect(event, k) {
 			}
 			
 			// Prevent tabbing out of the canvas
-			event.stopPropagation();
-			event.preventDefault();
+			StopEvent(e);
 			break;
 			
 		// Regular typing
@@ -794,12 +777,11 @@ function TypeDetect(event, k) {
 }
 
 /* Paste event */
-function Paste(event) {
-	var data = event.clipboardData.getData("text/plain"), f = FocusObj;
+function Paste(e) {
+	var data = e.clipboardData.getData("text/plain"), f = FocusObj;
 	if(data.length > 0 && f)
 		f.addText(data);
-	event.preventDefault();
-	event.stopPropagation();
+	StopEvent(e);
 }
 
 /* Set the input object */
