@@ -931,35 +931,37 @@ IMGFX = {
 		return T()-t1;
 	},	
 	
-	/* Map the "value" of each color to a point within a gradient
-	** TODO: Support for gradients with dynamic color stops */
+	/* Map the "value" of each color to a point within a gradient */
 	GradientMap: function(grad) {
 		if(!IMGFX.target) return;
 		
 		if(grad == undefined || grad.length == 1) {
 			// Default to background and foreground colors
 			grad = [ARCPY(MainColors.bg), ARCPY(MainColors.fg)];
+			grad[0].push(0);
+			grad[1].push(1);
 		}
 		
 		var d = IMGFX.td, d2 = IMGFX.GetHistory("last").img.data, img = IMGFX.GetTarget(), w = img.w, o = img.o*4, m = img.m, pw = img.fw*4, dl = w*img.h,
-			p = o, px = 0, py = 0, t, i = 0, c, k, g = grad.length-1, f = 1/g, t1 = T();
+			p = o, px = 0, py = 0, t, i = 0, j = 0, c, k, g = grad.length-1, t1 = T();
 		
 		for(; i < dl; i++) {
 			if(!m || m[i] > 0) {				
 				// BT.709 Grayscale conversion
 				t = ((d2[p]*0.2126)+(d2[p+1]*0.7152)+(d2[p+2]*0.0722))/255;
 				
-				// End color index
-				c = CEIL(g*t);
-				if(c == 0) c++;
+				// Get first grad index
+				for(c = 1; c <= g; c++) {
+					if(t <= grad[c][4]) break;
+				}
 				
-				// Color weight 'k' based on position 't' in gradient and start color index 'c-1'
-				k = (t-(f*(c-1)))*g;
+				// Color weight 'k' based on position 't' in between color[c-1] and color[c]
+				k = (t-grad[c-1][4])/(grad[c][4]-grad[c-1][4]);
 			
-				d[p] = (grad[c-1][0]*(1-k))+(grad[c][0]*k);
-				d[p+1] = (grad[c-1][1]*(1-k))+(grad[c][1]*k);
-				d[p+2] = (grad[c-1][2]*(1-k))+(grad[c][2]*k);
-				d[p+3] = (grad[c-1][3]*(1-k))+(grad[c][3]*k);
+				// Apply gradient
+				for(j = 0; j < 4; j++) {
+					d[p+j] = FLOOR((grad[c-1][j]*(1-k))+(grad[c][j]*k));
+				}
 				
 				if(m && m[i] < 255) IMGFX.PIX_MixSelectionAlpha(p, d, d2, m[i]/255);
 			}
@@ -1427,7 +1429,7 @@ IMGFX = {
 			}
 			
 		// Nearest neighbor + interpolate gaps
-		} else if(interp == 1) {		
+		} else if(interp == 1) {
 			for(i = 0; i < dl; i += 4) {
 				
 				j0 = p0 = p;

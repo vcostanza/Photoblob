@@ -95,12 +95,13 @@ FILTERS MENU:
 		- Selections supported
 		
 	Gradient Map: Apply a gradient based on the luma values of an image
-		- TODO: Create window
 		- By default: Uses a 2-color gradient based on the active backgroud and foreground color
+		- Click the gradient bar to add a new color tick, right-click the tick to remove it
+		- Click the color tick to change color using the Select Color window
 		- Selections supported
 		
 	Replace Color: Replace one color with another based on a specified amount/tolerance level
-		- Both color boxes are clickable and bring up the color chooser window
+		- Both color boxes are clickable and bring up the Select Color window
 		- "Amount" slider controls the tolerance for color matching
 		- Selections supported
 		
@@ -196,7 +197,7 @@ TOOLBOX:
 		- Click and hold to drag the image area
 		- Right-click to reset the image area to the center
 		- "Zoom Fit" and "Reset Zoom" will also reset to center
-		- SHIFT + scroll wheel moves up/down and ALT + scroll wheel moves left/right
+		- Scroll wheel moves up/down and SHIFT + scroll wheel moves left/right
 	
 	Zoom: Zoom in, out, or on a specific location
 		- Left-click to zoom in and right-click to zoom out
@@ -206,11 +207,11 @@ TOOLBOX:
 COLOR BOX:
 	Foreground Color: The color on the top-left
 		- Default is white
-		- Click to open color chooser
+		- Click to open Select Color window
 		
 	Background Color: The color on the bottom-right
 		- Default is black
-		- Click to open color chooser
+		- Click to open Select Color window
 		
 	Switch: Arrow icon on the top-right
 		- Switches foreground and background color
@@ -218,7 +219,7 @@ COLOR BOX:
 	Defaults: Small black and white icon on the bottom-left
 		- Sets foreground to white and background to black
 		
-COLOR CHOOSER:
+SELECT COLOR:
 	Hue (1st bar): Controls the color hue
 	Saturation (2nd bar): Controls the color saturation
 	Luma (3rd bar): Controls the color luma

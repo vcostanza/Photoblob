@@ -28,7 +28,7 @@ PBOX_Base = Class.extend({
 		
 		if(noImage == null) noImage = false;
 		
-		this.x = this.y = 0;
+		this.x = this.y = this.z = 0;
 		this.w = w, this.h = h;
 		this.title = title;	// Title displayed on bar
 		this.noImage = noImage;	// if window can be opened when no image is loaded
@@ -537,6 +537,8 @@ PBOX_Resize = PBOX_Base.extend({
 PBOX_ColorBox = PBOX_Base.extend({
 	init: function() {
 		this._super("Select Color", 330, 240, true);
+		this.x = 10;
+		this.y = 100;
 		this.b_apply.setText("OK");
 		
 		// HSL container used for recalc()
@@ -596,19 +598,26 @@ PBOX_ColorBox = PBOX_Base.extend({
 		
 		var i = 0, rgb = HSL2RGB(this.hsla[0], this.hsla[1], this.hsla[2]);
 		
-		this.cb[0].grad = [];
-		for(; i <= 10; i++) {
-			this.cb[0].grad[i] = HSL2RGB(i*0.1, 1, 0.5).concat(255);	// Calculate hue gradient
-			if(!noBarUpdate && i < 3) this.cb[i].value = this.hsla[i];	// While I'm here, update color box values
+		// Calculate hue gradient
+		if(this.cb[0].grad.length < 1) {
+			for(; i <= 10; i++) {
+				this.cb[0].grad[i] = HSL2RGB(i*0.1, 1, 0.5).concat([255, i/10]);
+			}
 		}
 		
-		if(!noBarUpdate) this.cb[3].value = this.hsla[3]/255;
+		// Update color bar sliders
+		if(!noBarUpdate) {
+			for(i = 0; i < 4; i++) {
+				this.cb[i].value = this.hsla[i];				
+			}
+			this.cb[3].value /= 255;
+		}
 		
 		// Saturation gradient
-		this.cb[1].grad = [[128, 128, 128, 255], HSL2RGB(this.hsla[0], 1, 0.5).concat(255)];
+		this.cb[1].setGradient([[128, 128, 128, 255], HSL2RGB(this.hsla[0], 1, 0.5).concat(255)]);
 		
 		// Alpha gradient
-		this.cb[3].grad = [rgb.concat(0), rgb.concat(255)];
+		this.cb[3].setGradient([rgb.concat(0), rgb.concat(255)]);
 		
 		this.rgba = rgb.concat(this.hsla[3]);
 		
@@ -1154,6 +1163,41 @@ PBOX_ChangeHSL = PBOX_Base.extend({
 		ctx.fillText(ROUND(this.sh.value*100)-50, this.sh.x+this.sh.w+10, this.sh.y+20, this.sh.w);
 		ctx.fillText(ROUND(this.ss.value*200)-100, this.ss.x+this.ss.w+10, this.ss.y+20, this.ss.w);
 		ctx.fillText(ROUND(this.sl.value*200)-100, this.sl.x+this.sl.w+10, this.sl.y+20, this.sl.w);
+	
+		ctx.restore();
+	}
+});
+
+/* Gradient mapping */
+PBOX_GradientMap = PBOX_Base.extend({
+	init: function() {
+		this._super("Gradient Map", 340, 120);
+		
+		this.grad = new GradientBar(300, 30, []);
+		
+		this.grad.onChange = function(grad) {
+			IMGFX.GradientMap(grad);
+		};
+		
+		this.setChildren(this.grad);
+	},
+	def: function() {
+		this.grad.update([MainColors.getBG(), MainColors.getFG()]);
+	},
+	apply: function() {
+		IMGFX.AddHistory("Gradient Map");
+	},
+	detect: function(x, y, type) {		
+		this.grad.detect(x, y, type);		
+		this._super(x, y, type);
+	},
+	draw: function(ctx) {
+		ctx.save();
+		
+		this.grad.set(this.x+15, this.y+15);
+		
+		// Drawing begins here
+		this._super(ctx);
 	
 		ctx.restore();
 	}
@@ -1859,7 +1903,7 @@ PBOX_About = PBOX_Base.extend({
 		this.name = "Photoblob";
 		this.desc = "Image/Texture Editor and 3D Model Viewer";
 		this.version = "0.2";
-		this.update = "Updated 03/21/2015";
+		this.update = "Updated 03/24/2015";
 		this.site = "http://photo.blob.software/";
 		this.copy = "© 2015 Vincent Costanza";
 		
@@ -1951,7 +1995,7 @@ PBOX = {
 	BoxBlur: new PBOX_BoxBlur(),
 	Shift: new PBOX_Shift(),
 	ChangeHSL: new PBOX_ChangeHSL(),
-	//GradientMap: new PBOX_GradientMap(),
+	GradientMap: new PBOX_GradientMap(),
 	ReplaceColor: new PBOX_ReplaceColor(),
 	View3D: new PBOX_View3D(),
 	ChooseTheme: new PBOX_ChooseTheme(),
@@ -1985,7 +2029,7 @@ PBOX = {
 					if(((t.x+t.w)-x) >= 0 && ((t.x+t.w)-x) <= 30) {
 						SC("pointer");
 						if(type == "click") t.close();
-					}					
+					}		
 				}
 				
 				// Currently dragging window
@@ -1993,8 +2037,8 @@ PBOX = {
 				
 					// Move window with mouse
 					if(type == "move") {
-						t.x = t.dragx+x;
-						t.y = t.dragy+y;
+						t.x = FLOOR(t.dragx+x);
+						t.y = FLOOR(t.dragy+y);
 						Update();
 						
 					// End window dragging
@@ -2024,10 +2068,9 @@ PBOX = {
 			if(typeof(t) == "object" && t.draw != undefined && t.active == true) {
 			
 				// Reset window position when off screen
-				if(!t.isDragging && (t.x <= 0 || t.x >= CWIDTH || t.y <= 0 || t.y >= CHEIGHT))
-				{
-					t.x = (CWIDTH-t.w)/2;
-					t.y = (CHEIGHT-t.h)/3;
+				if(!t.isDragging && (t.x <= 0 || t.x >= CWIDTH || t.y <= 0 || t.y >= CHEIGHT)) {
+					t.x = FLOOR((CWIDTH-t.w)/2);
+					t.y = FLOOR((CHEIGHT-t.h)/3);
 				}
 				
 				// Fading effects
@@ -2048,7 +2091,6 @@ PBOX = {
 				}
 				
 				t.draw(ctx);
-				
 				
 				ctx.save();
 				

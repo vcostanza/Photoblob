@@ -984,8 +984,7 @@ function HSL2RGB(h, s, l) {
 /* Return rgba() string */
 function rgba(r, g, b, a) {
 	if(r instanceof Array) {
-		var cpy = [r[0], r[1], r[2], r[3]/255];
-		return 'rgba('+cpy+')';
+		return 'rgba('+[r[0], r[1], r[2], r[3]/255]+')';
 	}
 	a /= 255;
 	return 'rgba('+r+','+g+','+b+','+a+')';
@@ -1391,7 +1390,7 @@ function InitMenus() {
 					new MenuItem("Grayscale", PBOX.Grayscale, "open"),
 					new MenuItem("Invert Colors", PBOX.InvertColors, "open"),
 					new MenuItem("Change HSL", PBOX.ChangeHSL, "open"),
-					new MenuItem("Gradient Map"/*, IMGFX.GradientMap*/),
+					new MenuItem("Gradient Map", PBOX.GradientMap, "open"),
 					new MenuItem("Replace Color", PBOX.ReplaceColor, "open"),
 					new MenuItem("Add Noise", PBOX.AddNoise, "open"),
 					new MenuItem("Posterize", PBOX.Posterize, "open"),

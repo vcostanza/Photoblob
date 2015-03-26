@@ -740,9 +740,29 @@ ColorBar = Box.extend({
 		this._super();
 		this.size(w, h);
 		this.orient = (w >= h ? 0 : 1);
-		this.grad = grad;
-		this.held = false;
-		this.value = 0;
+		this.held = false;	// Slider held
+		this.slider = true;	// Slider enabled		
+		this.value = 0;		// Slider value
+		
+		this.setGradient(grad);
+	},
+	// Safest way to set the gradient
+	setGradient: function(grad) {
+		this.grad = [];
+		
+		// Default to black if null gradient passed
+		if(!grad) grad = [[0, 0, 0, 255, 0], [0, 0, 0, 255, 1]];
+		
+		// Copy color to second color
+		else if(grad.length == 1) grad.push(ARCPY(grad[0]));
+		
+		for(var i = 0; i < grad.length; i++) {
+			// Make sure gradient offsets always go from 0 to 1
+			grad[i][4] = (i == 0 ? 0 : (i == grad.length-1 ? 1 : grad[i][4]));		
+			// Offset unspecified? approximate it
+			if(grad[i][4] == null) grad[i][4] = i/(grad.length-1);
+			this.grad.push(grad[i]);
+		}
 	},
 	detect: function(x, y, type) {
 		if(WB(x, y, this)) if(type == "down") this.held = true;
@@ -761,32 +781,169 @@ ColorBar = Box.extend({
 	draw: function(ctx) {
 		var grad = this.grad, i = stop = 0, posX = this.x+(this.value*this.w), g1 = ctx.createLinearGradient(this.x, this.y, this.orient == 0 ? this.x+this.w : this.x, this.orient == 1 ? this.y+this.h : this.y);
 		
+		// Fill alpha background
+		ctx.fillStyle = ctx.createPattern(ALPHA_BG, "repeat");
+		ctx.fillRect(this.x, this.y, this.w, this.h);
+		
+		// Construct gradient
+		for(; i < grad.length; i++) {
+			stop = grad[i][4];
+			if(stop == null || stop < 0 || stop > 1) stop = i/(grad.length-1);
+			g1.addColorStop(stop, rgba(grad[i]));
+		}
+		ctx.fillStyle = g1;
+		
+		// Fill color
 		ctx.strokeStyle = BLK;
 		ctx.lineWidth = 2;
-		if(grad.length <= 1) {
-			ctx.fillStyle = rgba(grad[0]);
-		} else {
-			for(; i < grad.length; i++) {
-				stop = grad[i].stop;
-				if(stop == null || stop < 0 || stop > 1) stop = i/(grad.length-1);
-				g1.addColorStop(stop, rgba(grad[i]));
-			}
-			ctx.fillStyle = g1;
-		}
-		ctx.clearRect(this.x, this.y, this.w, this.h);
 		ctx.strokeRect(this.x, this.y, this.w, this.h);
 		ctx.fillRect(this.x, this.y, this.w, this.h);
 		
 		// Slider
-		ctx.lineWidth = 2;
-		ctx.strokeStyle = WHT;
-		ctx.fillStyle = BLK;
-		ctx.strokeRect(posX-1, this.y+1, 3, this.h-2);
-		ctx.fillRect(posX-1, this.y, 3, this.h);
+		if(this.slider) {
+			ctx.lineWidth = 2;
+			ctx.strokeStyle = WHT;
+			ctx.fillStyle = BLK;
+			ctx.strokeRect(posX-1, this.y+1, 3, this.h-2);
+			ctx.fillRect(posX-1, this.y, 3, this.h);
+		}
 	}
 });
 
-/* Color box with picker */
+/* Editable gradient bar */
+GradientBar = ColorBar.extend({
+	init: function(w, h, grad) {
+		this._super(w, h, grad);
+		this.slider = false;
+		this.ticks = [];
+		this.update();
+	},
+	
+	// Update gradient ticks
+	update: function(grad) {
+		
+		var gl = this.grad.length, tl = this.ticks.length, offset, i = 0;
+		
+		// If a gradient is passed, use that as the reference
+		if(grad) {
+			this.setGradient(grad);
+			gl = this.grad.length;
+			
+		// Otherwise use the tick colors as reference
+		} else {
+			this.grad = [];
+			// Sort ticks by offset
+			this.ticks.sort(function(a, b) {
+				return a.value[4]-b.value[4];
+			});
+			for(i = 0; i < tl; i++) {
+				this.grad.push(this.ticks[i].value);
+			}
+			gl = tl;
+		}
+		
+		// Pop off excess ticks
+		if(tl > gl) {
+			for(i = gl; i < tl; i++) {
+				this.ticks.pop();
+			}
+			tl = gl;
+		}
+		
+		// Change existing ticks or add new
+		for(i = 0; i < gl; i++) {
+			if(i >= tl) {
+				this.newTick(this.grad[i]);
+			} else {
+				this.ticks[i].value = this.grad[i];
+			}
+		}
+		
+		// Fire changes
+		this.onChange(this.grad);
+		Update();
+	},
+	
+	// Add new tick
+	newTick: function(col) {
+		var t = this, tick = new GradientTick(t);
+		tick.setColor(col);
+		tick.onChange = function() {
+			t.update();
+		};
+		t.ticks.push(tick);
+		return tick;
+	},
+	
+	// Remove tick
+	removeTick: function(tick) {
+		var rm = false, i = 1;
+		if(this.ticks.length > 2) {
+			for(; i < this.ticks.length; i++) {			
+				if(this.ticks[i-1] == tick) rm = true;
+				if(rm) this.ticks[i-1] = this.ticks[i];
+			}
+			if(rm) {
+				this.ticks.pop();
+				this.update();
+			}
+		}
+	},
+	
+	onChange: function(grad) {
+		// Override me!
+	},
+	detect: function(x, y, type) {
+		var hit, i = 0;
+		
+		// Hit detection on ticks
+		for(; i < this.ticks.length; i++) {
+			if(!hit && !((i == 0 || i == this.ticks.length-1) && type != "up")) {
+				hit = this.ticks[i].detect(x, y, type);
+			}
+		}
+		
+		if(!hit && type == "click") {
+			if(!WB(x, y, this)) return;
+			
+			// Add new tick				
+			var g = ARCPY(this.grad), off = (x-this.x)/this.w, last = ARCPY(g[g.length-1]), c = 1;
+			
+			// Find right neighbor color
+			for(; c < g.length; c++) {
+				if(off <= g[c][4]) break;
+			}
+			
+			// Get position between neighbor colors
+			var k = (off-g[c-1][4])/(g[c][4]-g[c-1][4]);
+			
+			// Push new gradient on stack
+			g.push(last);
+			
+			// Move other gradients over
+			for(i = g.length-1; i > c; i--) {
+				g[i] = ARCPY(g[i-1]);
+			}
+			
+			// Set new gradient color based on interpolation
+			for(i = 0; i < 4; i++) {
+				g[c][i] = FLOOR((g[c-1][i]*(1-k))+(g[c][i]*k));
+			}
+			g[c][4] = off;
+			
+			this.update(g);
+		}
+	},
+	draw: function(ctx) {
+		this._super(ctx);
+		
+		for(var i = 0; i < this.ticks.length; i++) {
+			this.ticks[i].draw(ctx);
+		}
+	}
+});
+
+/* Clickable/changeable color box */
 ColorBox = Box.extend({
 	init: function(w, h) {
 		this._super();
@@ -820,6 +977,72 @@ ColorBox = Box.extend({
 	}
 });
 
+GradientTick = ColorBox.extend({
+	init: function(parent) {
+		this._super(10, 20);
+		this.parent = parent;
+		this.held = false;
+		this.lastPos = 0;	// Used to differentiate between clicks and drags
+	},
+	setColor: function(col) {
+		if(col[4] == null) col[4] = this.value[4];
+		for(var i = 0; i < 5; i++) {
+			this.value[i] = col[i];
+		}
+		this.lastPos = this.value[4];
+		this.onChange();
+	},
+	remove: function() {
+		if(this.parent)	this.parent.removeTick(this);
+	},
+	detect: function(x, y, type) {		
+		if(!this.parent) return;
+		
+		var hit = WB(x, y, this), o = this.value[4];
+		
+		// Tick is held
+		if(hit && type == "down") {
+			
+			// Remove on right-click
+			if(RCLICK) {
+				this.remove();
+			} else {
+				this.lastPos = o;
+				this.held = true;
+			}
+			
+		// Tick is released
+		} else if(LCLICK && type == "up") {
+			if(this.lastPos != o)
+				this.parent.update();
+			else if(hit)
+				this.devent("click");
+			this.lastPos = o;
+			this.held = false;
+			
+		// Tick is being moved
+		} else if(type == "move" && this.held) {
+			this.value[4] = Clamp((x-this.parent.x)/this.parent.w, 0, 1);
+			if(o != this.value[4]) Update();
+		}
+			
+		return hit;
+	},
+	draw: function(ctx) {
+		var p = this.parent;
+		if(p) {
+			var x = p.x, y = p.y, w = p.w, h = p.h, o = this.value[4], w2 = this.w/2;
+			this.set(x+w*o-w2, y+h);
+			
+			ctx.fillStyle = rgba(this.value);
+			ctx.strokeStyle = BLK;
+			ctx.lineWidth = 1;
+			DrawTriangle(ctx, this.x, this.y, this.x+w2, this.y-w2, this.x+this.w, this.y, true, true);
+			ctx.fillRect(this.x, this.y, this.w, this.h);
+			ctx.strokeRect(this.x, this.y, this.w, this.h);
+		}
+	}
+});
 
 /* Icon offsets */
 Icons = {
