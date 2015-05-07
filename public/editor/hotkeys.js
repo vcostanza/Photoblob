@@ -62,6 +62,7 @@ function DefaultHotkeys() {
 	SetHotkey("ctrl+b", "BoxSelect");
 	SetHotkey("ctrl+shift+a", "SelectNone");
 	SetHotkey("ctrl+shift+i", "InvertSelect");
+	SetHotkey("delete", "Clear");
 }
 
 function HK_CloseImage() {
@@ -154,6 +155,10 @@ function HK_BoxSelect() {
 	}
 }
 
+function HK_ClearPixels() {
+	IMGFX.Clear();
+}
+
 // Hotkeys object
 // These can be changed by the user in the Hotkeys window
 HK = {
@@ -176,7 +181,8 @@ HK = {
 		SelectAll: new Hotkey(HK_SelectAll, "Select All", "Select entire image or select all UVs."),
 		SelectNone: new Hotkey(HK_SelectNone, "Select None", "Remove selection or select no UVs."),
 		InvertSelect: new Hotkey(HK_InvertSelect, "Invert Select", "Invert the current selection."),
-		BoxSelect: new Hotkey(HK_BoxSelect, "Box Select", "Start box selecting.")
+		BoxSelect: new Hotkey(HK_BoxSelect, "Box Select", "Start box selecting."),
+		Clear: new Hotkey(HK_ClearPixels, "Clear", "Erase pixels within the selection.")
 	},
 	
 	// Temporary hotkey input

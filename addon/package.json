@@ -1,11 +1,13 @@
 {
-  "name": "photoblob_quick-open",
-  "title": "Photoblob Quick-Open",
-  "id": "jid1-OgHAuwsyQCWUPw",
+  "title": "Photoblob Quick-open",
+  "name": "photoblob-quick-open",
+  "version": "0.0.2",
   "description": "Right-click to open images in Photoblob.",
+  "main": "index.js",
   "author": "Vincent Costanza",
-  "homepage": "http://blob.software/",
-  "icon": "icon.png",
-  "license": "MPL 2.0",
-  "version": "0.1"
+  "engines": {
+    "firefox": ">=38.0a1",
+    "fennec": ">=38.0a1"
+  },
+  "license": "MIT"
 }

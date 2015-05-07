@@ -91,137 +91,7 @@ MenuBarItem = Box.extend({
 	}
 });
 
-/* Top menu bar */
-MenuBar = {
-	x: 0,
-	y: 0,
-	w: 100,
-	h: 30,
-	highlight: null,
-	
-	// Menu items
-	items: [new MenuBarItem("File"), new MenuBarItem("Edit"), new MenuBarItem("Image"), new MenuBarItem("Layer"),
-	new MenuBarItem("Select"), new MenuBarItem("Filter"), new MenuBarItem("View"), new MenuBarItem("Settings"), new MenuBarItem("Help")],
-	
-	// HIT DETECTION
-	detect: function(x, y, type) {
-	
-		var item = null;
-		
-		if(WB(x, y, this)) {
-			for(var i in this.items) {
-				if(WB(x, y, this.items[i])) {
-					item = this.items[i];
-					break;
-				}
-			}
-		}
-		
-		// Menu items
-		if(item) {		
-			if(type == "up") {
-				if(this.menu == item.menu)
-					this.close(item);
-				else
-					this.open(item);
-			}
-				
-			if(type == "move") {
-				if(this.menu)
-					this.open(item);
-				this.setHighlight(item);
-			}
-			return false;
-		} else {
-			this.setHighlight();
-		}
-		
-		// Menu opened
-		if(this.menu) {
-			
-			var menu = this.menu, opts = menu.options;
-			
-			if(WB(x, y, menu) || item) {
-				
-				var m = FLOOR((y-menu.y)/(menu.h/opts.length));
-				
-				if(opts[m] == null) {
-					menu.setHighlight(-1);
-					return false;
-				}
-				
-				// Run function on click
-				if(type == "up") {					
-					// Regular function - caller doesn't matter
-					if(!opts[m].caller) opts[m].func();						
-					// Caller or 'this' matters
-					else opts[m].caller[opts[m].func]();					
-					// Close menu
-					this.close();
-					
-				// Hover highlight
-				} else if(type == "move") {
-					menu.setHighlight(m);
-				}
-				return true;
-			} else {
-				if(type == "up")
-					this.close();
-				else if(type == "move")
-					menu.setHighlight(-1);
-			}
-		}		
-		return false;		
-	},
-	
-	// Menu options
-	menu: null,
-	
-	close: function() {
-		if(this.menu != null) {
-			this.menu.setHighlight(-1);
-			this.menu = null;
-			Update();
-		}
-	},
-	
-	open: function(item) {
-		if(this.menu != item.menu) {
-			this.menu = item.menu;
-			this.menu.set(item.x, item.y+item.h);
-			Update();
-		}
-	},
-	
-	setHighlight: function(h) {
-		if(this.highlight != h) {
-			this.highlight = h;
-			Update();
-		}
-	},
-	
-	draw: function(ctx) {
-		ctx.save();
-		
-		this.w = CWIDTH-this.x;
-		ctx.fillStyle = BG4;
-		RoundRect(ctx, this.x, this.y, this.w, this.h, 10, true, false, true);
-		
-		var i = 0;
-		
-		for(; i < this.items.length; i++) {
-			this.items[i].set(this.x+(95*i)+10, this.y, 90, this.h, 18, this);
-			this.items[i].draw(ctx);
-		}
-		
-		if(this.menu)
-			this.menu.draw(ctx);
-		
-		ctx.restore();
-	}
-};
-
-/* Menu */
+/* Drop-down menu */
 Menu = Box.extend({
 	init: function(options) {
 		this.options = options;
@@ -376,17 +246,40 @@ ImageButton = Button.extend({
 	}
 });
 
-/* Radio button
-** NOTE: Only asthetic, functionality is implemented separately */
+/* Radio button */
 RadioButton = Box.extend({
-	init: function(text, value) {
+	init: function(parent, text) {
 		this._super();
 		this.size(20, 20);
 		this.text = text;
-		this.value = value;
+		this.parent = parent;
+		this.type = "RadioButton";
 	},
+	// Override toggle so it deactivates all sibling buttons
+	toggle: function(on) {
+		
+		if(on == null) on = !this.active;
+		
+		// Turn this button on, turn others off
+		if(on && this.parent) {
+			// Get sibling radio buttons
+			var rb = [];
+			GetRadioChildren(this.parent, rb);
+			
+			// Turn them all off
+			for(var i = 0; i < rb.length; i++) {
+				rb[i].toggle(false);
+			}
+		}
+		
+		this.active = on;
+	},
+	// Detection event
 	devent: function(type) {
-		if(type == "click") this.toggle();
+		if(type == "click") {
+			// Turn this button on
+			this.toggle(true);
+		}
 	},
 	draw: function(ctx) {
 	
@@ -424,11 +317,11 @@ CheckBox = Box.extend({
 	draw: function(ctx) {
 	
 		ctx.fillStyle = BG5;
-		//ctx.fillRect(this.x, this.y, this.w, this.h);
 		RoundRect(ctx, this.x, this.y, this.w, this.h, 5, true, false);
 		
 		ctx.fillStyle = C1, ctx.font = "14px "+F1;
 		
+		// Draw check mark if active
 		if(this.active) {
 			ctx.fillText("✓", this.x+2, this.y+15);
 		}
@@ -510,8 +403,11 @@ TextBox = Box.extend({
 		// Set cursor pos
 		this.sta = this.ind = Clamp(min+str.length, 0, (ml ? ml : v.length+str.length));
 		
+		// Negate numbers
+		if(this.numOnly && str == "-") v = -this.get();
+		
 		// Append new text
-		if(!(this.numOnly && isNaN(str))) {
+		if(!(this.numOnly && isNaN(str))) {			
 			v = v.substring(0, i)+str+v.substring(i);
 			v = v.substring(0, (ml?ml:v.length));
 		}
@@ -536,13 +432,15 @@ TextBox = Box.extend({
 		if(this.numOnly) {
 			var v = this.value, num = v;
 			
-			if(v == "") num = this.min;
+			// Convert string value to number
+			if(v == "") num = MAX(this.min, 0);
 			else if(v == "-") num = -1;
 			else num = parseInt(num);
 			
+			// Clamp value
 			if(num > this.max) this.value = v = num = this.max;
 			else if(num < this.min) this.value = v = num = this.min;
-						
+			
 			return (asString == true ? v.toString() : num);
 		}
 		return this.value.toString();
@@ -673,18 +571,16 @@ TextBox = Box.extend({
 	}
 });
 
-/* Label */
+/* Generic label */
 Label = Box.extend({
 	init: function(w, h, text) {
 		this._super();
 		this.size(w, h);
 		this.value = text;
 	},
-	draw: function(ctx) {
-		
+	draw: function(ctx) {		
 		ctx.fillStyle = C1, ctx.font = (this.h-4)+"px "+F1;
-		ctx.fillText(this.value, this.x+4, this.y+this.h-4, this.w-8);
-		
+		ctx.fillText(this.value, this.x+4, this.y+this.h-4, this.w-8);		
 	}
 });
 
@@ -708,8 +604,7 @@ HyperLink = Label.extend({
 			SC("pointer");
 		}
 	},
-	draw: function(ctx) {
-		
+	draw: function(ctx) {		
 		if(this.active) {
 			ctx.fillStyle = C1;
 			ctx.fillRect(this.x, this.y+this.h+1, this.w, 2);
@@ -717,20 +612,7 @@ HyperLink = Label.extend({
 			ctx.fillStyle = C2;
 		}
 		ctx.font = (this.h-4)+"px "+F1;
-		ctx.fillText(this.value, this.x, this.y+this.h, this.w);
-		
-	}
-});
-
-/* Drop down menu */
-DDMenu = Box.extend({
-	init: function(title, items) {
-		this._super();
-		this.title = title;
-		this.setItems(items);
-	},
-	setItems: function(items) {
-		
+		ctx.fillText(this.value, this.x, this.y+this.h, this.w);		
 	}
 });
 
@@ -977,6 +859,7 @@ ColorBox = Box.extend({
 	}
 });
 
+/* Tick used by gradient bar */
 GradientTick = ColorBox.extend({
 	init: function(parent) {
 		this._super(10, 20);
@@ -1044,7 +927,7 @@ GradientTick = ColorBox.extend({
 	}
 });
 
-/* Icon offsets */
+/* Icon spritesheet offsets */
 Icons = {
 		
 	// Return icon sprite offset
@@ -1090,8 +973,139 @@ BG = {
 	}
 };
 
-/* Frame drawer */
-FrameNum = {
+/* Top menu bar */
+MenuBar = {
+	x: 0,
+	y: 0,
+	w: 100,
+	h: 30,
+	highlight: null,
+	
+	// Menu items
+	items: [new MenuBarItem("File"), new MenuBarItem("Edit"), new MenuBarItem("Image"), new MenuBarItem("Layer"),
+	new MenuBarItem("Select"), new MenuBarItem("Filter"), new MenuBarItem("View"), new MenuBarItem("Settings"), new MenuBarItem("Help")],
+	
+	// HIT DETECTION
+	detect: function(x, y, type) {
+	
+		var item = null;
+		
+		// Mouse within menu bar, find specific menu item
+		if(WB(x, y, this)) {
+			for(var i in this.items) {
+				if(WB(x, y, this.items[i])) {
+					item = this.items[i];
+					break;
+				}
+			}
+		}
+		
+		// Menu items
+		if(item) {		
+			if(type == "up") {
+				if(this.menu == item.menu)
+					this.close(item);
+				else
+					this.open(item);
+			}
+				
+			if(type == "move") {
+				if(this.menu)
+					this.open(item);
+				this.setHighlight(item);
+			}
+			return false;
+		} else {
+			this.setHighlight();
+		}
+		
+		// Menu opened
+		if(this.menu) {
+			
+			var menu = this.menu, opts = menu.options;
+			
+			if(WB(x, y, menu) || item) {
+				
+				var m = FLOOR((y-menu.y)/(menu.h/opts.length));
+				
+				if(opts[m] == null) {
+					menu.setHighlight(-1);
+					return false;
+				}
+				
+				// Run function on click
+				if(type == "up") {					
+					// Regular function - caller doesn't matter
+					if(!opts[m].caller) opts[m].func();						
+					// Caller or 'this' matters
+					else opts[m].caller[opts[m].func]();					
+					// Close menu
+					this.close();
+					
+				// Hover highlight
+				} else if(type == "move") {
+					menu.setHighlight(m);
+				}
+				return true;
+			} else {
+				if(type == "up")
+					this.close();
+				else if(type == "move")
+					menu.setHighlight(-1);
+			}
+		}		
+		return false;		
+	},
+	
+	// Menu options
+	menu: null,
+	
+	close: function() {
+		if(this.menu != null) {
+			this.menu.setHighlight(-1);
+			this.menu = null;
+			Update();
+		}
+	},
+	
+	open: function(item) {
+		if(this.menu != item.menu) {
+			this.menu = item.menu;
+			this.menu.set(item.x, item.y+item.h);
+			Update();
+		}
+	},
+	
+	setHighlight: function(h) {
+		if(this.highlight != h) {
+			this.highlight = h;
+			Update();
+		}
+	},
+	
+	draw: function(ctx) {
+		ctx.save();
+		
+		this.w = CWIDTH-this.x;
+		ctx.fillStyle = BG4;
+		RoundRect(ctx, this.x, this.y, this.w, this.h, 10, true, false, true);
+		
+		var i = 0;
+		
+		for(; i < this.items.length; i++) {
+			this.items[i].set(this.x+(95*i)+10, this.y, 90, this.h, 18, this);
+			this.items[i].draw(ctx);
+		}
+		
+		if(this.menu)
+			this.menu.draw(ctx);
+		
+		ctx.restore();
+	}
+};
+
+/* Performance information displayed at top-right corner (LOCAL only) */
+DebugInfo = {
 	draw: function(ctx, drawTime) {
 		
 		// Calculate total image byte size
@@ -1220,6 +1234,7 @@ StatusBar = {
 };
 
 /* The editing area */
+/* All tool functionality is implemented here */
 EditArea = {
 	x: 80,
 	y: 35,
@@ -1267,9 +1282,7 @@ EditArea = {
 				else if(SHIFT) ia.setOffset(ia.off_x+(16/ZOOM), ia.off_y);
 				else ia.setOffset(ia.off_x, ia.off_y+(16/ZOOM));
 			}
-		}
-		
-		
+		}		
 		
 		// Nothing left to do if there's no tool active
 		if(!tool) return;
@@ -1337,7 +1350,7 @@ EditArea = {
 				if(WC(ix, iy, 0, 0, iw, ih)) {
 					d = IMGFX.SampleColor(ix, iy, 1);
 				} else {
-					d = [102, 102, 102, 255];
+					d = HEX2RGB(GRY).concat(255);
 				}
 				MainColors.setFG(d);
 				MainColors.drawInside(ctx);
@@ -1350,12 +1363,6 @@ EditArea = {
 		} else if(tool == "Brush" || tool == "Erase" || tool == "Pencil") {
 			
 			SC("crosshair");
-			
-			/*if(Brushes.cursor) {
-				Brushes.x = x;
-				Brushes.y = y;
-				if(type == "move") Update();
-			}*/
 			
 			if(!WC(ix, iy, 0, 0, iw, ih) || (type != "down" && type != "up" && type != "move")) return;
 			
@@ -1442,7 +1449,7 @@ EditArea = {
 				this.grabY = y+ia.off_y;
 			}
 			if(LCLICK && MDOWN) {
-				SC("grabbing");
+				SC("move");
 				ia.setOffset(this.grabX-x, this.grabY-y);
 			}
 			
@@ -1685,20 +1692,17 @@ UVMap = {
 	selectedUVs: null,	// Array of selected UV indices
 	
 	dumpUVs: function(g) {
-		if(g && g.faceVertexUvs) {
-			var fvu = g.faceVertexUvs, i = 0, j = 0, k = 0;
+		if(g && g.attributes && g.attributes.uv) {
 			
+			// Clear UVs, set current geometry
 			this.UVs = [], this.geo = g;
 			
+			var i = 0, uvs = g.attributes.uv.array;
+			
 			// Vertex groups
-			for(; i < fvu.length; i++) {
-				// Faces
-				for(j = 0; j < fvu[i].length; j++) {
-					// Vertices
-					for(k = 0; k < 3; k++) {
-						this.UVs.push(fvu[i][j][k].x, 1-fvu[i][j][k].y);
-					}
-				}
+			for(; i < uvs.length; i += 2) {
+				this.UVs.push(uvs[i]);
+				this.UVs.push(1-uvs[i+1]);
 			}
 			// Setup xy coordinate and selection arrays
 			this.UVxy = new Uint16Array(this.UVs.length);
@@ -1723,19 +1727,14 @@ UVMap = {
 	},
 	updateUVs: function() {
 		if(this.geo) {
-			var fvu = this.geo.faceVertexUvs, i = 0, j = 0, k = 0, v = 0;
+			var uvs = this.geo.attributes.uv.array, i = 0, j = 0, k = 0, v = 0;
 			
 			// Sync model UV data with UVMap data
-			for(i = 0; i < fvu.length; i++) {
-				for(j = 0; j < fvu[i].length; j++) {
-					for(k = 0; k < 3; k++) {
-						fvu[i][j][k].x = this.UVs[v];
-						fvu[i][j][k].y = 1-this.UVs[v+1];
-						v += 2;
-					}
-				}
-			}			
-			this.geo.uvsNeedUpdate = true;
+			for(i = 0; i < uvs.length; i += 2) {
+				uvs[i] = this.UVs[i];
+				uvs[i+1] = 1-this.UVs[i+1];
+			}
+			this.geo.attributes.uv.needsUpdate = true;
 			Update();
 		}
 	},
@@ -2207,7 +2206,7 @@ function Tool(name, active) {
 		ctx.fillStyle = (ToolBox.active == this ? BG2 : (this.active && ToolBox.highlight == this ? BG6 : BG5));
 		ctx.fillRect(this.x, this.y, this.w, this.h);
 		if(this.icon) {
-			if(IC_SMALL.complete) ctx.drawImage(IC_SMALL, this.icon[0], this.icon[1], 64, 64, this.x+3, this.y+3, this.w-6, this.h-6);
+			if(IC_SMALL.loaded) ctx.drawImage(IC_SMALL, this.icon[0], this.icon[1], 64, 64, this.x+3, this.y+3, this.w-6, this.h-6);
 		}
 	};
 }
@@ -2508,7 +2507,7 @@ Brushes = {
 	}
 }
 
-/* Draw the editor loop */
+/* Draw loop */
 function DrawEditor() {
 
 	if(!canvas) return;
@@ -2528,7 +2527,7 @@ function DrawEditor() {
 	ctx.clearRect(0, 0, CWIDTH, CHEIGHT);
 	
 	// This is the proper rendering order
-	// Screwing with this may draw things wrong
+	// Modifying this may draw things incorrectly
 	EditArea.draw(ctx);
 	ImageArea.draw(ctx);
 	UVMap.draw(ctx);
@@ -2542,8 +2541,7 @@ function DrawEditor() {
 	Tooltip.draw(ctx);
 	
 	// DEBUG: draw this on top of everything
-	if(LOCAL) FrameNum.draw(ctx, T()-t);
+	if(LOCAL) DebugInfo.draw(ctx, T()-t);
 	
-	requestAnimationFrame(DrawEditor);
-	
+	requestAnimationFrame(DrawEditor);	
 }

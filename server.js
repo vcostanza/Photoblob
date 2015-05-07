@@ -36,8 +36,9 @@ app.get('/', function(req, res) {
 
 // Request texture list
 app.post('/textures', function(req, res) {
-	CL(req);
-	res.send("Hey");
+	// Not implemented yet...
+	// This will return a list of textures from the texture database based on
+	// user parameters like color(s), resolution, tags, etc.
 });
 
 // Open image from link
@@ -58,5 +59,7 @@ app.post('/openlink', function(req, res) {
 
 // Start server
 app.listen(3000, function(){
-	CL("Working on port 3000");
+	CL("Working on port 3000");	
 });
+
+

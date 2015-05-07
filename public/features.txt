@@ -1,4 +1,4 @@
-///// PHOTOBLOB COMPLETE FEATURE LIST ver. 0.2 \\\\\
+///// PHOTOBLOB COMPLETE FEATURE LIST ver. 0.2.1 \\\\\
 
 FILE MENU:
 	New: Create a new image by specifying a width and height (in pixels)
@@ -70,12 +70,10 @@ FILTERS MENU:
 		- Normal mode: Darken decreases contrast, lighten increases contrast
 		- Additive mode: Darken increases contrast, lighten decreases contrast
 		- Glow mode: Midtones change more, highlights and shadows change less
-		- Selections supported
 		
 	Auto Contrast: "Stretch" the tonal range of the image so it reaches pure black and pure white
 		- Will only affect images that don't have any pure black/white pixels
 		- Alters color
-		- Selections supported
 	
 	Grayscale: Convert the image to grayscale using several different modes
 		- Average: Average of color channels
@@ -83,46 +81,41 @@ FILTERS MENU:
 		- Desaturate: Average of min and max color channels
 		- Red/Green/Blue Channel: Set to specific color channel
 		- Luma: Based on luma coefficients (see http://en.wikipedia.org/wiki/Luma_%28video%29)
-		- Selections supported
 	
 	Invert Colors: Invert the red, green, and/or blue color channels
 		- Inverts all 3 channels by default
-		- Selections supported
 		- HOTKEY: ctrl+i
 	
 	Change HSL: Shift the hue, saturation, and luma
 		- Top slider is hue, middle slider is saturation, bottom slider is luma
-		- Selections supported
 		
 	Gradient Map: Apply a gradient based on the luma values of an image
 		- By default: Uses a 2-color gradient based on the active backgroud and foreground color
 		- Click the gradient bar to add a new color tick, right-click the tick to remove it
 		- Click the color tick to change color using the Select Color window
-		- Selections supported
 		
 	Replace Color: Replace one color with another based on a specified amount/tolerance level
 		- Both color boxes are clickable and bring up the Select Color window
 		- "Amount" slider controls the tolerance for color matching
-		- Selections supported
 		
 	Add Noise: Apply additive noise based on a specified amount
-		- Selections supported
 		
 	Posterize: Separate an image into levels ranging from 2 to 256
-		- Selections supported
 		
 	Box Blur: Blur the image using a box blur based on a specified radius
-		- Experimental - disabled for now
 		
-	Motion Blur: Blur the image based on a specified angle and length
-		- Experiemental - disabled for now
+	Sharpen: Sharpen the image based on a specified radius and intensity
+		
+	Custom Kernel: Apply a custom filter using a 3x3 convolution matrix
+		- Amplification and sum divisor can be specified (Defaults are 1 and 'sum' respectively)
+		- Selections unsupported
 		
 VIEW MENU:
 	3D View: Opens the THREE.js model viewer and UV editor
 		- [Dump UVs]: Sends the model UVs to the edit area
 		- [Clear UVs]: Removes the model UVs from the edit area
-		- [Import]: Import a JSON model to the viewer (Old UVs are cleared automatically)
-		- [Export]: Export the model to JSON format (experimental - disabled for now)
+		- [Import]: Import a JSON model to the viewer
+		- [Export]: Export the model to JSON or OBJ format
 		- Model texture is updated each time the history state is changed
 		- Model UVs are updated each time they're edited with the UV Edit tool
 		- Model can be rotated with click and drag and zoomed with the scroll wheel
@@ -138,7 +131,6 @@ VIEW MENU:
 		
 	Fullscreen: Toggle fullscreen mode
 		- Exit fullscreen with escape key
-		- Bug: WebGL canvas is not visible
 		
 SETTINGS MENU:
 	Hotkeys: View and modify hotkeys
@@ -175,15 +167,18 @@ TOOLBOX:
 	Brush: Apply a brush to the image
 		- Click and drag to begin applying brush
 		- Color is based on foreground color
+		- Selections unsupported
 		- Brush size and type customization to come
 		
 	Pencil: Set the color of the image pixel at mouse position
 		- Similar functionality to Brush tool
 		- Hold ctrl and click to erase any existing pencil marks
+		- Selections unsupported
 	
 	Erase: Apply an erasing brush to the image
 		- Similar functionality to Brush tool
 		- Erases to empty alpha
+		- Selections unsupported
 		
 	Fill: Fill an image area based on color
 		- Fill color is based on foreground color
@@ -232,7 +227,7 @@ SELECT COLOR:
 	- The Hexadecimal text input allows controlling color using a hex value
 
 HISTORY:
-	- Click a history entry load it into the image area
+	- Click a history entry to load it into the image area
 	
 	- Scroll arrows will appear on the top and/or bottom of the history panel when there isn't any
 		room to display more items (scroll wheel works here also)
@@ -251,3 +246,8 @@ STATUS BAR:
 OTHER:
 	Image Browser: Used to view and load from a collection of images
 		- Hover over each image to see its width, height, file size, and type
+		- Click the image to load it and begin editing
+		
+	Clear: Clear pixels within the active seleciton or from the entire image
+		- Replaces pixels with the active background color
+		- HOTKEY: delete

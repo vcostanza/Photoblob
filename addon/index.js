@@ -3,8 +3,11 @@ cm = require("sdk/context-menu"),
 Request = require("sdk/request").Request,
 base64 = require("sdk/base64"),
 data = require("sdk/self").data,
-{ setTimeout } = require("sdk/timers"),
+
+// Context menu icon
 icon16 = data.url('icon-16.png'),
+
+// Website URL
 PB_URL = "http://photo.blob.software/";
 
 // Context menu button

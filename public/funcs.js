@@ -15,6 +15,24 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/* Included scripts to be loaded sequentially on page load */
+INCLUDES = [
+	// IMGFX
+	"fx.js",
+	// Three.js (r71)
+	"three.min.js",
+	// Three.js OBJ loader
+	"OBJLoader.js",
+	// Three.js OBJ exporter
+	"OBJExporter.js",
+	// Hotkeys
+	"editor/hotkeys.js",
+	// Main editor/GUI script
+	"editor/main.js",
+	// Windows
+	"editor/pbox.js"
+];
+
 /* Objects and Nodes */
 FileDialog = FocusObj = ImageArea = App = Input = null;
 
@@ -32,6 +50,7 @@ MouseX = MouseY = LastMouseX = LastMouseY = -1;
 LastUpdate = 0;
 Frame = 0;
 
+// Image properties
 ZOOM = 1;
 IMG_NAME = null;
 IMG_SIZE = 0;
@@ -41,6 +60,7 @@ ImageArea = null;
 ALPHA_BG = null;
 ERROR_IMG = null;
 IC_SMALL = null;
+IC_SMALL_XML = null;
 
 /* Basic input */
 CTRL = SHIFT = ALT = MDOWN = LCLICK = RCLICK = MIDCLICK = false;
@@ -51,6 +71,9 @@ InFullscreen = false;
 // Used for assigning hotkeys
 LockKeyboard = false;
 
+// Unsaved changes
+Unsaved = false;
+
 // Activate Three.JS console messages
 THREE_MSG = false;
 
@@ -58,7 +81,7 @@ THREE_MSG = false;
 // Should be left blank if node server is hosted on same server as this site
 NODE_SERVER = "";
 
-// Is this being hosted locally?
+// Is this app being hosted locally?
 LOCAL = (window.location.host == "" || window.location.host.indexOf("localhost:") == 0);
 
 // Math function aliases
@@ -72,28 +95,7 @@ if(!TRUNC) TRUNC = function(num) {
 	return FLOOR(num);
 };
 
-function insert(line, start, l, t) {
-	
-	if(!line) return -1;
-	
-	var mid = start+FLOOR(l/2);
-	
-	// Break out
-	if(l == 0) {
-		return start;
-	}
-	
-	if(t < line[mid]) {
-		CL("LEFT");
-		return insert(line, start, mid, t);
-	} else if(t > line[mid]) {
-		CL("RIGHT");
-		return insert(line, mid+1, mid, t)
-	}
-	return start;
-}
-
-/* Array copy I would make this an Array.prototype function but that usually breaks everything, so let's play it safe */
+/* Return copy of array 'arr' */
 function ARCPY(arr) {
 	var arrcpy = new Array(arr.length), i = 0;
 	for(; i < arr.length; i++) {
@@ -103,15 +105,21 @@ function ARCPY(arr) {
 	return arrcpy;
 }
 
-/* Debug variable values */
+/* Print variables */
 function CL() {
+	
+	// More than 1 argument
 	if(arguments.length > 1) {
 		var a = new Array(arguments.length), i = 0;
 		for(; i < arguments.length; i++) {
 			a[i] = arguments[i];
+			
+			// Do not print Three.js messages if THREE_MSG is false
 			if(!THREE_MSG && a[i] && a[i].indexOf && a[i].indexOf("THREE.") == 0) return;
 		}
 		console.log(a);
+		
+	// 1 argument
 	} else {
 		console.log(arguments[0]);
 	}	
@@ -128,12 +136,12 @@ function ERR(str) { console.error(str); }
 /* Get canvas 2D context */
 function GC(c) { return c.getContext("2d"); }
 
-/* Set cursor */
+/* Set cursor to be used after hit detection */
 function SC(cursor) {
-	Cursor = cursor == undefined ? "auto" : cursor;
+	Cursor = (cursor == undefined ? "auto" : cursor);
 }
 
-/* Get element alias */
+/* Get DOM element(s) by ID or class */
 function E(name) {
 	if(name.charAt(0) == ".")
 		return document.getElementsByClassName(name.substr(1));
@@ -145,7 +153,7 @@ function D(e, show) {
 	show == true ? e.style.display = "block" : e.style.display = "none";
 }
 
-/* Timing alias */
+/* Return current precise time */
 function T() { return window.performance.now(); }
 
 /* Test within bounds (object based) */
@@ -180,7 +188,7 @@ function Lerp2D(x1, y1, x2, y2) {
 	y2 -= y1;
 	x1 = y1 = 0;
 	
-	// Switch before I do anything
+	// Switch before we do anything
 	if(ABS(x2-x1) < ABS(y2-x1)) {
 		t = y2;
 		y2 = x2;
@@ -263,13 +271,13 @@ function StopEvent(e) {
 
 /* Go fullscreen */
 function FS() {
-	if(!canvas) return;
-	if(canvas.requestFullScreen)
-		canvas.requestFullScreen();
-	else if(canvas.webkitRequestFullScreen)
-		canvas.webkitRequestFullScreen();
-	else if(canvas.mozRequestFullScreen)
-		canvas.mozRequestFullScreen();
+	if(!App) return;
+	if(App.requestFullScreen)
+		App.requestFullScreen();
+	else if(App.webkitRequestFullScreen)
+		App.webkitRequestFullScreen();
+	else if(App.mozRequestFullScreen)
+		App.mozRequestFullScreen();
 	InFullscreen = true;
 }
 
@@ -308,7 +316,7 @@ function RecurCall(obj, func) {
 	}
 }
 
-/* Adjust canvas size to style size */
+/* Update canvas dimensions, if we need to */
 function FixCanvasSize() {
 	if(canvas.width != canvas.clientWidth || canvas.height != canvas.clientHeight) {
 		CWIDTH = canvas.width = canvas.clientWidth;
@@ -359,13 +367,17 @@ function ReadFiles(e) {
 	
 	if(!f) return;
 	
-	// Load base64 image
+	// Load file
 	reader.onload = function(e) {
+		
+		// base64 image
 		if(type == 0) {
 			OpenImage(e.target.result, e.target.fileName);
 			IMG_SIZE = e.target.size;
+			
+		// JSON/OBJ model
 		} else if(type == 1) {
-			PBOX.View3D.setModel(e.target.result);
+			PBOX.View3D.setModel(e.target.result, e.target.fileName);
 		}
 	}
 	
@@ -379,57 +391,19 @@ function ReadFiles(e) {
 			reader.fileName = f[i].name;
 			reader.readAsDataURL(f[i]);
 			
-		// JSON
-		} else if(type == 1 && f[i].type.match(/application.java/)) {
+		// JSON or plain text only
+		} else if(type == 1 && (f[i].type.match(/application.java/) || f[i].type == "")) {
+			reader.fileName = f[i].name;
 			reader.readAsText(f[i]);
 		}
 	}
 	
-	/* Automatic reverse image search */
-	
-	/*var xhr = new XMLHttpRequest();
-	xhr.open('POST', NODE_SERVER+'/upload', true);
-	
-	xhr.onload = function() {			
-		var xh2 = new XMLHttpRequest();
-		xh2.open('POST', NODE_SERVER+'/search', true);
-		xh2.onload = function() {
-			
-			if(xh2.status == 200) {
-				
-				// Check that cookies are enabled
-				if(xh2.response.indexOf("Cookies disabled") == 0) {
-					CL("You have cookies disabled for this site. Please allow cookies from "+(NODE_SERVER == "" ? window.location.hostname : NODE_SERVER.substring(0, NODE_SERVER.indexOf(':'))));
-				} else if(xh2.response.indexOf("Error") == 0) {
-					// Do nothing
-				} else {
-					
-					// Parse matches response
-					var thumbs = JSON.parse(xh2.response);
-					PBOX.ImageBrowser.images = [];
-					
-					// Open the image browser if we have matches
-					if(thumbs.length > 0) {
-						
-						thumbs.sort(function(a, b) { return a.a[0]-b.a[0] });
-						
-						for(i = 0; i < thumbs.length; i++) {
-							thumbs[i].d = IMG(thumbs[i].d);
-							PBOX.ImageBrowser.images[i] = thumbs[i];
-						}
-						PBOX.ImageBrowser.open();
-					}
-				}
-			}
-		}
-		xh2.send(null);
-		
-		//CL(xhr.status +"\t"+xhr.responseText);
-	};
-	
-	xhr.send(form);*/
-	
 	StopEvent(e);
+}
+
+/* Update canvas draw */
+function Update() {
+	LastUpdate = Frame;
 }
 
 /* Start up the editor */
@@ -437,12 +411,12 @@ function StartEditor() {
 	
 	document.title = "Photoblob - Loading...";
 
-	// Load images
+	// Load icons and alpha texture
 	ALPHA_BG = IMG("alpha.png");
 	ERROR_IMG = IMG("icons/error.svg");
 	IC_SMALL = IMG("icons/icons_small.svg");
 	
-	// Define nodes
+	// Get important nodes
 	Input = E("text-input");
 	App = E("app-container");
 	
@@ -450,19 +424,20 @@ function StartEditor() {
 	canvas = E("editor");
 	if(!canvas) return;
 	
+	// Fix canvas size and set default theme to black
 	FixCanvasSize();
 	SetTheme(17);
 	
+	// Capture all global variables at this point - No non-capitalized globals should be declared after this
+	// This can be checked later with CheckWindow()
+	// This system is used to make sure common variables like 'i' or 'j' are not accidently declared globally somewhere
 	CloneWindow();
 	
-	//var t = T();
-	
-	// Load editor scripts
-	LoadScripts(["fx.js", "three.min.js", "editor/hotkeys.js", "editor/main.js", "editor/pbox.js"], function(progress) {
+	// Load included scripts
+	LoadScripts(INCLUDES, function(progress) {
 		
 		// Done
-		if(progress == 100) {		
-			//CL("Loaded scripts in "+(T()-t)/1000+" seconds.");
+		if(progress == 100) {
 			
 			document.title = "Photoblob - A Blobware Project";
 			
@@ -492,30 +467,32 @@ function StartEditor() {
 			});
 			Input.addEventListener("paste", Paste);
 			
+			// Prevent unsaved changes
+			addEventListener("beforeunload", ConfirmLeave);
+			
+			// Initialize the top menu bar
 			InitMenus();
 			
+			// Begin drawing the GUI
 			Update();
 			DrawEditor();
 			
+			// Add-on image check
 			QuickOpenCheck();
 			addEventListener("focus", function(){setTimeout(QuickOpenCheck, 50);});	// Because the tab activate event fires after window.focus
 			
 			// Hide the loader
 			l.style.pointerEvents = "none";
-			l.style.opacity = 0.0;
-			
+			l.style.opacity = 0.0;			
 			setTimeout(function() {
 				D(l, false);
 			}, 1000);
+			
+		// Update loading progress
 		} else {
 			document.title = "Photoblob - Loading ["+progress+"%]";
 		}
 	});	
-}
-
-/* Update canvas draw */
-function Update() {
-	LastUpdate = Frame;
 }
 
 /* Detect mouse events */
@@ -523,7 +500,7 @@ function MouseDetect(e) {
 	
 	var t = e.target,
 	
-		// This is the best cross-browser method of getting canvas coords
+		// This is the best cross-browser method of getting canvas coordinates
 		x = FLOOR(e.clientX-t.getBoundingClientRect().left),
 		y = FLOOR(e.clientY-t.getBoundingClientRect().top),
 		
@@ -538,10 +515,12 @@ function MouseDetect(e) {
 	MouseX = x;
 	MouseY = y;
 	
-	// Stop click events here, passing them to the detections is redudant
+	// Prevent right-click context menu (right-click is used for moving UVs)
 	if(type == "contextmenu") {
 		StopEvent(e);
 		return;
+		
+	// Stop here if the user hits the Open Image hotkey
 	} else if(type == "click") {
 		if(CTRL && ALT) {
 			OpenDialog();
@@ -578,11 +557,11 @@ function MouseDetect(e) {
 			HistoryBox.detect(x, y, type);
 			EditArea.detect(x, y, type);
 			StatusBar.detect(x, y, type);
-			
-			// Prevent scroll wheel default events
-			if(type.indexOf("wheel") == 0) StopEvent(e);
 		}
 	}
+	
+	// Prevent scroll wheel default events
+	if(type.indexOf("wheel") == 0) StopEvent(e);
 	
 	// Mouse up
 	if(type == "up") {
@@ -593,7 +572,7 @@ function MouseDetect(e) {
 		}
 	}
 	
-	// After all detects are done
+	// Update mouse cursor after the detection events are finished
 	if(Cursor != canvas.style.cursor)
 		canvas.style.cursor = Cursor;
 	SC();
@@ -603,7 +582,7 @@ function MouseDetect(e) {
 function Hotkeys(e) {
 	var ct = CTRL = e.ctrlKey, k = e.key, sh = SHIFT = e.shiftKey, alt = ALT = e.altKey, hk = false;
 	
-	// Legacy
+	// Legacy (event.key not supported)
 	if(k == null) {
 		
 		var kc = e.keyCode;
@@ -692,8 +671,11 @@ function Hotkeys(e) {
 		}		
 	}
 	
+	// Prevent event if a hotkey was hit
 	if(hk) {		
 		StopEvent(e);
+		
+	// Otherwise pass key to typing function
 	} else {
 		if(CTRL || ALT) return;
 		TypeDetect(e, k);
@@ -712,13 +694,13 @@ function TypeDetect(e, k) {
 	
 	switch(k.toLowerCase()) {
 		
-		// Delete next char
+		// Delete next character
 		case "del":
 		case "delete":
 			f.remove(f.ind);
 			break;
 			
-		// Delete previous char
+		// Delete previous character
 		case "backspace":
 			f.remove(f.ind-1);
 			break;
@@ -779,6 +761,8 @@ function TypeDetect(e, k) {
 /* Paste event */
 function Paste(e) {
 	var data = e.clipboardData.getData("text/plain"), f = FocusObj;
+	
+	// Pass paste data to text input
 	if(data.length > 0 && f)
 		f.addText(data);
 	StopEvent(e);
@@ -807,7 +791,7 @@ function SetInputFocus(obj) {
 }
 
 /* Quick-open add-on: check for open request */
-function QuickOpenCheck() {
+function QuickOpenCheck() {	
 	try {
 		var qoi = sessionStorage.getItem("photoblob-quick-open-img");
 		if(qoi) {
@@ -821,7 +805,15 @@ function QuickOpenCheck() {
 	} catch(e) {}
 }
 
-/* Return a 1D array of all text object children in a parent object */
+/* User is about to leave the page before saving */
+function ConfirmLeave(e) {
+	if(Unsaved) {
+		e.returnValue = "You haven't saved your image.";
+		e.preventDefault();
+	}
+}
+
+/* Return a 1D array of all text box children in parent */
 function GetTextChildren(parent, children) {
 	
 	if(!children) children = [];
@@ -837,7 +829,62 @@ function GetTextChildren(parent, children) {
 	}
 }
 
-/* Quick line */
+/* Similar to above, applies to radio buttons only */
+function GetRadioChildren(parent, children) {
+	
+	if(!children) children = [];
+	
+	for(var i in parent) {		
+		if(parent[i]) {		
+			if(parent[i] instanceof Array) {
+				GetRadioChildren(parent[i], children);
+			} else if(parent[i].type == "RadioButton") {
+				children.push(parent[i]);
+			}
+		}
+	}
+}
+
+/* Perform a speed test for a function
+ * func:	The function to test
+ * arg:		Array of arguments to pass to function
+ * iter:	Number of iterations
+ * freq:	Delay between iterations
+ * sum:		Keeps track of total time
+ * cb:		Callback when finished
+ */
+function SpeedTest(func, arg, iter, freq, sum, cb) {		
+	if(iter < 1) {
+		cb(sum);
+		return;
+	}
+	
+	// Begin speed test
+	if(sum == null) {
+		sum = 0;
+		CL("Performing speed test for "+func.name+"...");
+		cb = function(s) {
+			var avg = s/iter;
+			CL("Average time for "+func.name+": "+(ROUND(avg*1000)/1000)+" ms");
+		}
+	}
+	
+	var t1 = T();
+	
+	func.apply(null, arg);
+	
+	sum += (T()-t1);
+	
+	if(freq > 0) {
+		setTimeout(function() {
+			SpeedTest(func, arg, iter-1, freq, sum, cb);
+		}, freq);
+	} else {
+		SpeedTest(func, arg, iter-1, freq, sum, cb);
+	}
+}
+
+/* Quick line drawing */
 function DrawLine(ctx, x1, y1, x2, y2) {
 	ctx.beginPath();
 	ctx.moveTo(x1, y1);
@@ -862,14 +909,23 @@ function DrawTriangle(ctx, x1, y1, x2, y2, x3, y3, stroke, fill) {
 	ctx.closePath();
 }
 
-/* Rounded rectangle Written by Juan Mendes Modified by Blobware */
+/* Draw rounded rectangle
+ * 
+ * Code modified from an answer posted on StackOverflow
+ * http://stackoverflow.com/questions/1255512/how-to-draw-a-rounded-rectangle-on-html-canvas
+ * Question by DNB5brims (http://stackoverflow.com/users/148978/dnb5brims)
+ * Answer by Juan Mendes (http://stackoverflow.com/users/227299/juan-mendes)
+ * 
+ * Modified here to support half-rounded rectangles */
 function RoundRect(ctx, x, y, w, h, r, fill, stroke, half) {
 	
+	// Default values
 	if(typeof r == "undefined") r = 5;
 	if(typeof fill == "undefined") fill = true;
 	if(typeof stroke == "undefined") stroke = true;
 	if(typeof half == "undefined") half = false;
 	
+	// Begin drawing rectangle
 	ctx.beginPath();
 	
 	half ? ctx.moveTo(x, y) : ctx.moveTo(x + r, y);
@@ -897,36 +953,17 @@ function RoundRect(ctx, x, y, w, h, r, fill, stroke, half) {
 	
 }
 
-function SpeedTest(func, arg, iter, freq, sum, cb) {		
-	if(iter < 1) {
-		cb(sum);
-		return;
-	}
-	if(sum == null) {
-		sum = 0;
-		CL("Performing speed test for "+func.name+"...");
-		cb = function(s) {
-			var avg = s/iter;
-			CL("Average time for "+func.name+": "+(ROUND(avg*1000)/1000)+" ms");
-		}
-	}
-	
-	var t1 = T();
-	
-	func.apply(null, arg);
-	
-	sum += (T()-t1);
-	
-	if(freq > 0) {
-		setTimeout(function() {
-			SpeedTest(func, arg, iter-1, freq, sum, cb);
-		}, freq);
-	} else {
-		SpeedTest(func, arg, iter-1, freq, sum, cb);
-	}
-}
+SIXTH = 1/6, THIRD = 1/3, HALF = 1/2, TWOTHIRD = 2/3;
 
-/* RGB to HSL Written by Mohsen */
+/* HSL/RGB conversion functions
+ * 
+ * Code modified from an answer posted on StackOverflow
+ * http://stackoverflow.com/questions/2353211/hsl-to-rgb-color-conversion
+ * Question by hhafez (http://stackoverflow.com/users/42303/hhafez)
+ * Answer by Mohsen (http://stackoverflow.com/users/650722/mohsen)
+ * Answer edited by JDB (http://stackoverflow.com/users/211627/jdb)
+ * 
+ * Modified to accept array input */
 function RGB2HSL(r, g, b) {
 	
 	if(r instanceof Array) return RGB2HSL(r[0], r[1], r[2]);
@@ -939,7 +976,7 @@ function RGB2HSL(r, g, b) {
 		h = s = 0;
 	} else {
 		var d = max - min;
-		s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+		s = l > HALF ? d / (2 - max - min) : d / (max + min);
 		switch(max) {
 			case r: h = (g - b) / d + (g < b ? 6 : 0); break;
 			case g: h = (b - r) / d + 2; break;
@@ -950,11 +987,6 @@ function RGB2HSL(r, g, b) {
 
 	return [h, s, l];
 }
-
-
-/* HSL to RGB Written by Mohsen */
-
-SIXTH = 1/6, THIRD = 1/3, HALF = 1/2, TWOTHIRD = 2/3;
 
 function h2r(p, q, t) {
 	if(t < 0) t += 1;
@@ -979,6 +1011,47 @@ function HSL2RGB(h, s, l) {
 	}
 
 	return [CEIL(r * 255), CEIL(g * 255), CEIL(b * 255)];
+}
+
+/* Shift the hue, saturation, and/or luminance of an RGB color */
+function ShiftHSL(r, g, b, hf, sf, lf) {
+
+	r /= 255, g /= 255, b /= 255;
+	var max = MAX(r, g, b), min = MIN(r, g, b);
+	var h, s, l = (max + min) / 2;
+
+	// Convert RGB -> HSL
+	if(max == min) {
+		h = s = 0;
+	} else {
+		var d = max - min;
+		s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+		switch(max) {
+			case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+			case g: h = (b - r) / d + 2; break;
+			case b: h = (r - g) / d + 4; break;
+		}
+		h /= 6;
+	}
+	
+	// Apply shift
+	h = h+hf - FLOOR(h+hf);
+	s = Clamp(s+sf, 0, 1);
+	l = Clamp(l+lf, 0, 1);
+	
+	// Convert HSL -> RGB
+	if(s == 0) {
+		r = g = b = l;
+	} else {
+		var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+		var p = 2 * l - q;
+		r = h2r(p, q, h + THIRD);
+		g = h2r(p, q, h);
+		b = h2r(p, q, h - THIRD);
+	}
+	
+	// Return modified RGB
+	return [CEIL(r * 255), CEIL(g * 255), CEIL(b * 255)];	
 }
 
 /* Return rgba() string */
@@ -1047,6 +1120,10 @@ function RGB2HEX(r, g, b) {
 
 /* Hex to RGB */
 function HEX2RGB(h) {
+	
+	// Remove hash
+	if(h[0] == '#') h = h.substring(1);
+	
 	var r = 0, g = 0, b = 0, len = h.length;
 	
 	switch(len) {		
@@ -1058,63 +1135,6 @@ function HEX2RGB(h) {
 		case 6: r = base10(h[0]+h[1]), g = base10(h[2]+h[3]), b = base10(h[4]+h[5]); break;
 	}
 	return [r, g, b];
-}
-
-// Get byte length of a string
-// Written by 200_success @ StackOverflow
-function getByteLen(normal_val) {
-    // Force string type
-    normal_val = String(normal_val);
-
-    var byteLen = 0;
-    for (var i = 0; i < normal_val.length; i++) {
-        var c = normal_val.charCodeAt(i);
-        byteLen += c < (1 <<  7) ? 1 :
-                   c < (1 << 11) ? 2 :
-                   c < (1 << 16) ? 3 :
-                   c < (1 << 21) ? 4 :
-                   c < (1 << 26) ? 5 :
-                   c < (1 << 31) ? 6 : Number.NaN;
-    }
-    return byteLen;
-}
-
-/* Change color HSL directly */
-function ShiftHSL(r, g, b, hf, sf, lf) {
-
-	r /= 255, g /= 255, b /= 255;
-	var max = MAX(r, g, b), min = MIN(r, g, b);
-	var h, s, l = (max + min) / 2;
-
-	if(max == min) {
-		h = s = 0;
-	} else {
-		var d = max - min;
-		s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-		switch(max) {
-			case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-			case g: h = (b - r) / d + 2; break;
-			case b: h = (r - g) / d + 4; break;
-		}
-		h /= 6;
-	}
-	
-	h = h+hf - FLOOR(h+hf);
-	s = Clamp(s+sf, 0, 1);
-	l = Clamp(l+lf, 0, 1);
-	
-	if(s == 0) {
-		r = g = b = l;
-	} else {
-		var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-		var p = 2 * l - q;
-		r = h2r(p, q, h + THIRD);
-		g = h2r(p, q, h);
-		b = h2r(p, q, h - THIRD);
-	}
-	
-	return [CEIL(r * 255), CEIL(g * 255), CEIL(b * 255)];
-	
 }
 
 /* Image data container */
@@ -1170,7 +1190,7 @@ function SetImageName(name) {
 }
 
 /* Show the open dialog */
-// type		0 for image, 1 for JSON
+// type	= 0 for image, 1 for JSON
 function OpenDialog(type) {
 	
 	// Create upload dialog if it doesn't exist
@@ -1181,6 +1201,7 @@ function OpenDialog(type) {
 		FileDialog.addEventListener("change", ReadFiles);
 	}
 	
+	// Begin upload
 	if(type == null) type = 0;	
 	FileDialog.uploadType = type;
 	FileDialog.click();
@@ -1190,7 +1211,7 @@ function OpenDialog(type) {
 function OpenImage(src, name, skipSVG) {
 	CloseImage();
 	
-	// Special open for SVGs
+	// Special open dialog for SVGs
 	if(!skipSVG && GetBase64Mime(src) == "image/svg+xml") {
 		var svg = IMG(src);
 		svg.onload = function() {
@@ -1233,12 +1254,17 @@ function OpenImageLink(src) {
 			res = JSON.parse(res.substring(res.indexOf("IMAGES: ")+8));
 			
 			var i = 0, j = 0, add2Browser = function(e) {
-				// Check that it's available
-				if(!(e.target.width == 0 && e.target.height == 0 || !e.target.valid)) {				
+				
+				// Check if the image is available
+				if(!(e.target.width == 0 && e.target.height == 0 || !e.target.valid)) {
+					
+					// Resize image to thumbnail
 					var img = e.target, src = img.src, w = img.width, h = img.height, mult = GetScaleToFit(w, h, 200, 200);
 					img.loaded = true;
 					img.width = FLOOR(w*mult);
 					img.height = FLOOR(h*mult);
+					
+					// Add thumbnail to image browser with image info
 					PBOX.ImageBrowser.images.push({
 						d: img,
 						t: (src.indexOf("data:") == 0 ? MimeToExt(GetBase64Mime(src)) :
@@ -1262,11 +1288,14 @@ function OpenImageLink(src) {
 		}
 	};
 	
+	// Expecting JSON from the Node server
 	xhr.setRequestHeader("Content-type", "application/json; charset=UTF-8");
+	
+	// Send request to load image or HTML page of images
 	xhr.send(JSON.stringify({link: src}));
 }
 
-/* Create new image */
+/* Create new image from width and height */
 function NewImage(w, h) {
 	
 	if(isNaN(w)) w = 128;
@@ -1292,6 +1321,7 @@ function CloseImage() {
 		document.title = "Photoblob - A Blobware Project";
 		IMG_NAME = null;
 		IMG_SIZE = 0;
+		Unsaved = false;
 		Update();
 	}
 }
@@ -1320,7 +1350,7 @@ function LoadImageData(img) {
 	return ctx.getImageData(0, 0, img.width, img.height);
 }
 
-/* Save image data */
+/* Prepare image for download */
 /* Must be called during a click (detect) event */
 function ExportImage(name, mimetype) {
 	
@@ -1329,11 +1359,9 @@ function ExportImage(name, mimetype) {
 	xport.href = img;
 	xport.download = (name == null ? IMG_NAME : name);
 	xport.click();
-}
-
-/* Close the image export thing */
-function CloseImageExport() {
-	D(E("export-img"), false);
+	
+	// Changes are saved
+	Unsaved = false;
 }
 
 /* Initiate menus */
@@ -1346,7 +1374,7 @@ function InitMenus() {
 					new MenuItem("Open", function() {
 						OpenDialog();
 					}),
-					//new MenuItem("Open Link", PBOX.OpenLink, "open"),
+					new MenuItem("Open Link", PBOX.OpenLink, "open"),
 					new MenuItem("Save", PBOX.Save, "open"),
 					new MenuItem("Close", CloseImage)
 				]));
@@ -1394,8 +1422,10 @@ function InitMenus() {
 					new MenuItem("Replace Color", PBOX.ReplaceColor, "open"),
 					new MenuItem("Add Noise", PBOX.AddNoise, "open"),
 					new MenuItem("Posterize", PBOX.Posterize, "open"),
-					new MenuItem("Box Blur"/*, PBOX.BoxBlur, "open"*/),
-					new MenuItem("Motion Blur")
+					new MenuItem("Mix History", PBOX.MixHistory, "open"),
+					new MenuItem("Custom Kernel", PBOX.Kernel, "open"),
+					new MenuItem("Box Blur", PBOX.BoxBlur, "open"),
+					new MenuItem("Sharpen", PBOX.Sharpen, "open")
 				]));
 				break;
 			case "View":
@@ -1430,7 +1460,7 @@ function InitMenus() {
 /* Set the color theme */
 function SetTheme(num) {
 
-	// Most used
+	// Defaults
 	F1 = "Purisa", C1 = "#DD9", C2 = "#DD6", C3 = "#AA8", C4 = "#FFC",  WHT = "#FFF", BLK = "#000", GRY = "#666";
 
 	switch(num) {
@@ -1511,6 +1541,10 @@ function SetTheme(num) {
 		
 	}
 	
+	// Change icon colors
+	UpdateIconColors();
+	
+	// Generate HTML page background
 	var can = document.createElement("canvas"), ctx = GC(can);
 	can.width = can.height = 40;
 	ctx.fillStyle = BG1;
@@ -1523,9 +1557,8 @@ function SetTheme(num) {
 	document.body.style.backgroundImage = img;
 	document.body.style.backgroundColor = BG1;
 	
-	// Don't forget the canvas container and background
+	// Canvas container background
 	App.style.background = BG2;
-	
 	
 	// Update global var
 	CurrentTheme = num;
@@ -1533,7 +1566,50 @@ function SetTheme(num) {
 	Update();
 }
 
-// Load texture list
+/* Modify icon colors so they match the current theme */
+function UpdateIconColors() {
+	
+	// Load icon XML data if we don't already have it
+	if(IC_SMALL_XML == null) {	
+		var xhr = new XMLHttpRequest();
+		xhr.open("GET", "icons/icons_small.svg", true);
+		xhr.onload = function() {
+			if(xhr.status == 200) {
+				IC_SMALL_XML = xhr.response;
+				UpdateIconColors();
+			}
+		};
+		xhr.send(null);
+		return;
+	}
+	
+	var xml = IC_SMALL_XML, col, col_bg = RGB2HSL(HEX2RGB(BG7)), i = 0;
+	
+	// Change hue of every color in SVG to theme hue
+	do {
+		i = xml.indexOf("#", i)+1;
+		
+		// Found hex color
+		if(xml.indexOf(";", i)-i == 6) {
+			
+			// Get HSL of hex color
+			col = RGB2HSL(HEX2RGB(xml.substring(i, xml.indexOf(";", i))));
+			
+			// Only modify grays
+			if(col[0] == 0 && col[1] == 0) {
+						
+				// Combine hue and saturation of theme background color 7 and value of hex color, then put it back in SVG
+				xml = xml.substring(0, i)+RGB2HEX(HSL2RGB(col_bg[0], col_bg[1], col[2]))+xml.substring(xml.indexOf(";", i));
+			}
+		}
+	}
+	while(i > 0);
+	
+	// Reload SVG
+	IC_SMALL = IMG("data:image/svg+xml;base64,"+btoa(xml));	
+}
+
+/* Request list of textures from Node server database (Not implemented yet) */
 function TextureList() {
 	var xhr = new XMLHttpRequest();
 	xhr.open('POST', NODE_SERVER+'/textures', true);
@@ -1546,7 +1622,7 @@ function TextureList() {
 	xhr.send(null);
 }
 
-// Get initial window snapshot
+/* Get window variable snapshot */
 function CloneWindow() {	
 	WinClone = [];
 	for(var i in window) {
@@ -1554,7 +1630,7 @@ function CloneWindow() {
 	}
 }
 
-// Check window snapshot for changes (should be none)
+/* Check window snapshot for changes (should be none) */
 function CheckWindow() {
 	var hit, diff = [];
 	for(var i in window) {
@@ -1564,7 +1640,7 @@ function CheckWindow() {
 		}
 		if(!hit && i.charAt(0) != i.charAt(0).toUpperCase()) diff.push(i);
 	}
-	console.dir(diff);
+	CL(diff);
 }
 
 // Start here

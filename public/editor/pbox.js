@@ -16,7 +16,7 @@
  */
 
 /*
-** POP UP DIALOG BOXES
+** WINDOWS AND OTHER POP UP DIALOG BOXES
 */
 
 /* Base PBOX */
@@ -41,6 +41,9 @@ PBOX_Base = Class.extend({
 		// Title bar dragging
 		this.isDragging = false;
 		this.dragx = this.dragy = 0;
+		
+		// Allow input outside of window
+		this.outsideInput = false;
 		
 		// Many windows have "Ok" and "Cancel" type buttons, so these are default
 		this.b_apply = new Button("Apply");
@@ -170,7 +173,7 @@ PBOX_New = PBOX_Base.extend({
 	}
 });
 
-/* Open from link window */
+/* Open image or page URL window */
 PBOX_OpenLink = PBOX_Base.extend({
 	init: function() {
 		this._super("Open Link", 500, 80, true);
@@ -347,14 +350,14 @@ PBOX_Save = PBOX_Base.extend({
 		this.imgTxt = new TextBox(this, 280, 20, "untitled.png", 32);
 		
 		// File type boxes
-		this.rb = [new RadioButton("JPEG"), new RadioButton("PNG")];
-		this.rb_val = 0;
+		this.rb = [new RadioButton(this, "JPEG"), new RadioButton(this, "PNG")];
+		this.value = 0;
 		
 		this.setChildren(this.imgTxt, this.rb);
 	},
 	def: function() {
 		this.imgTxt.value = IMG_NAME;
-		this.rb[this.rb_val].toggle(true);
+		this.rb[this.value].toggle(true);
 	},
 	apply: function() {
 		var name = this.imgTxt.get(), ext = name.lastIndexOf('.');
@@ -390,12 +393,9 @@ PBOX_Save = PBOX_Base.extend({
 		if(type == "click") {
 			for(var i = 0; i < this.rb.length; i++) {
 				if(this.rb[i].detect(x, y, type)) {
-					this.rb_val = this.mime = i;
+					this.value = this.mime = i;
 				}
-				this.rb[i].toggle(false);
 			}
-			
-			this.rb[this.rb_val].toggle(true);		
 		}
 	},
 	draw: function(ctx) {
@@ -753,20 +753,19 @@ PBOX_FontBox = PBOX_Base.extend({
 PBOX_Grayscale = PBOX_Base.extend({
 	init: function() {
 		this._super("Grayscale Image", 220, 310);
-		this.rb = [new RadioButton("Average"), new RadioButton("Darken"), new RadioButton("Lighten"), new RadioButton("Desaturate"),
-		new RadioButton("Red Channel"), new RadioButton("Green Channel"), new RadioButton("Blue Channel"),
-		new RadioButton("Luma (SDTV)"), new RadioButton("Luma (HDTV)"), new RadioButton("Luma (UHDTV)")];
+		this.rb = [new RadioButton(this, "Average"), new RadioButton(this, "Darken"), new RadioButton(this, "Lighten"), new RadioButton(this, "Desaturate"),
+		new RadioButton(this, "Red Channel"), new RadioButton(this, "Green Channel"), new RadioButton(this, "Blue Channel"),
+		new RadioButton(this, "Luma (SDTV)"), new RadioButton(this, "Luma (HDTV)"), new RadioButton(this, "Luma (UHDTV)")];
 		
 		// Radio button value
-		this.rb_val = 0;
+		this.value = 0;
 		
 		this.setChildren(this.rb);
 	},
 	def: function() {
-		for(var e in this.rb) this.rb[e].toggle(false);
 		this.rb[0].toggle(true);
 		IMGFX.Grayscale(0);
-		this.rb_val = 0;
+		this.value = 0;
 	},
 	apply: function() {
 		IMGFX.AddHistory("Grayscale");
@@ -777,13 +776,10 @@ PBOX_Grayscale = PBOX_Base.extend({
 		if(type == "click") {
 			for(var i = 0; i < this.rb.length; i++) {
 				if(this.rb[i].detect(x, y, type)) {
-					this.rb_val = i;
+					this.value = i;
 					IMGFX.Grayscale(i);
 				}
-				this.rb[i].toggle(false);
 			}
-			
-			this.rb[this.rb_val].toggle(true);
 		}
 		
 		this._super(x, y, type);
@@ -901,7 +897,7 @@ PBOX_Brightness = PBOX_Base.extend({
 		this.mode = 0;
 		
 		this.s = new Slider(400);
-		this.rb = [new RadioButton("Normal"), new RadioButton("Additive"), new RadioButton("Glow")];
+		this.rb = [new RadioButton(this, "Normal"), new RadioButton(this, "Additive"), new RadioButton(this, "Glow")];
 		
 		this.setChildren(this.s, this.rb);
 	},
@@ -917,13 +913,11 @@ PBOX_Brightness = PBOX_Base.extend({
 		// Radio buttons
 		if(type == "click") {
 			for(var i = 0; i < this.rb.length; i++) {
-				this.rb[i].toggle(false);
 				if(this.rb[i].detect(x, y, type)) {
 					this.mode = i;
 					IMGFX.Brightness(ROUND(this.s.value*400), i);
 				}
 			}
-			this.rb[this.mode].toggle(true);
 		}
 		
 		// Slider
@@ -1034,12 +1028,74 @@ PBOX_Posterize = PBOX_Base.extend({
 	}
 });
 
+/* Mix current and previous history state */
+PBOX_MixHistory = PBOX_Base.extend({
+	init: function() {
+		this._super("Mix History", 500, 120);
+		this.s = new Slider(200);
+		this.setChildren(this.s);
+	},
+	// Don't open if there aren't enough history states
+	open: function() {
+		if(IMGFX.current < 1) return;
+		this._super();
+	},
+	def: function() {
+		this.s.value = 0.5;
+		IMGFX.MixHistory(0.5);
+	},
+	apply: function() {
+		IMGFX.AddHistory("Mix History");
+	},
+	detect: function(x, y, type) {
+		
+		// Slider
+		if(this.s.detect(x, y, type)) {
+			IMGFX.MixHistory(this.s.value);
+		}
+		
+		this._super(x, y, type);
+		
+	},
+	draw: function(ctx) {
+		ctx.save();
+		
+		this.s.set(this.x+(this.w-this.s.w)/2, this.y+30);
+		
+		// Drawing begins here
+		this._super(ctx);
+		
+		// Mix percentage
+		ctx.font = "22px "+F1;
+		ctx.fillStyle = C1;
+		ctx.textAlign = "center";
+		ctx.fillText(ROUND(this.s.value*100)+"%", this.s.x+(this.s.w/2), this.s.y-4, this.s.w);
+		
+		ctx.font = "16px "+F1;
+		
+		// Current state
+		ctx.textAlign = "right";
+		ctx.fillText(IMGFX.history[IMGFX.current].name, this.s.x-10, this.s.y+20, this.s.x-this.x);
+		
+		// Previous state
+		ctx.textAlign = "left";
+		
+		// Gray out to show that previous state isn't compatible (different size)
+		if(IMGFX.history[IMGFX.current-1].img.data.length != IMGFX.LastData().length)
+			ctx.fillStyle = GRY;
+		
+		ctx.fillText(IMGFX.history[IMGFX.current-1].name, this.s.x+this.s.w+10, this.s.y+20, this.s.x-this.x);
+	
+		ctx.restore();
+	}
+});
+
 /* Box blur */
 PBOX_BoxBlur = PBOX_Base.extend({
 	init: function() {
-		this._super("Box Blur", 380, 100);
+		this._super("Box Blur", 290, 120);
 		
-		this.s = new Slider(300);
+		this.s = new Slider(200);
 		this.setChildren(this.s);
 	},
 	def: function() {
@@ -1050,9 +1106,11 @@ PBOX_BoxBlur = PBOX_Base.extend({
 	},
 	detect: function(x, y, type) {
 		
+		var oldval = this.s.value;
+		
 		// Slider
 		if(this.s.detect(x, y, type)) {
-			IMGFX.BoxBlur(ROUND(this.s.value*20));
+			if(oldval != this.s.value) IMGFX.BoxBlur(this.s.value*20);
 		}
 		
 		this._super(x, y, type);
@@ -1061,14 +1119,61 @@ PBOX_BoxBlur = PBOX_Base.extend({
 	draw: function(ctx) {
 		ctx.save();
 		
-		this.s.set(this.x+20, this.y+10);
+		this.s.set(this.x+(this.w-this.s.w)/2, this.y+40);
 		
 		// Drawing begins here
 		this._super(ctx);
 		
 		ctx.font = "22px "+F1;
 		ctx.fillStyle = C1;
-		ctx.fillText(ROUND(this.s.value*20), this.s.x+this.s.w+10, this.s.y+20, this.s.w);
+		ctx.textAlign = "center";
+		ctx.fillText(ROUND(this.s.value*200)/10+"px", this.x+this.w/2, this.y+30, this.s.w);
+	
+		ctx.restore();
+	}
+});
+
+/* Sharpen */
+PBOX_Sharpen = PBOX_Base.extend({
+	init: function() {
+		this._super("Sharpen", 280, 180);
+		
+		this.sr = new Slider(200);
+		this.si = new Slider(200);
+		this.setChildren(this.sr, this.si);
+	},
+	def: function() {
+		this.sr.value = this.si.value = 0.0;
+	},
+	apply: function() {
+		IMGFX.AddHistory("Sharpen");
+	},
+	detect: function(x, y, type) {
+		
+		var val1 = this.sr.value, val2 = this.si.value;
+		
+		// Radius and intensity sliders
+		if(this.sr.detect(x, y, type) || this.si.detect(x, y, type)) {
+			if(val1 != this.sr.value || val2 != this.si.value)
+				IMGFX.Sharpen(ROUND(this.sr.value*19)+1, CEIL(this.si.value*1000), 1000);
+		}
+		
+		this._super(x, y, type);		
+	},
+	draw: function(ctx) {
+		ctx.save();
+		
+		this.sr.set(this.x+(this.w-this.sr.w)/2, this.y+40);
+		this.si.set(this.x+(this.w-this.si.w)/2, this.y+100);
+		
+		// Drawing begins here
+		this._super(ctx);
+		
+		ctx.font = "22px "+F1;
+		ctx.fillStyle = C1;
+		ctx.textAlign = "center";
+		ctx.fillText("Radius: "+(ROUND(this.sr.value*19)+1)+"px", this.x+this.w/2, this.y+30, this.sr.w);
+		ctx.fillText("Intensity: "+ROUND(this.si.value*1000), this.x+this.w/2, this.y+90, this.si.w);
 	
 		ctx.restore();
 	}
@@ -1264,16 +1369,129 @@ PBOX_ReplaceColor = PBOX_Base.extend({
 	}
 });
 
+/* Custom Image Kernel window */
+PBOX_Kernel = PBOX_Base.extend({
+	init: function() {
+		this._super("Custom Kernel", 300, 300);
+		
+		this.name = new TextBox(this, 200, 20, "Custom", 16);
+		this.sum = new TextBox(this, 50, 24, 1, 5, true, -9999, 9999);
+		this.cb = new CheckBox("Ignore Alpha", 0);
+		
+		this.sum.onchange = function(o, n) {
+			this.parent.update();
+		};
+		
+		this.setSize(3);
+	},
+	setSize: function(s) {
+		
+		this.txt = [];
+		this.size = s = MAX((s%2==0?s+1:s), 3);
+		
+		var i = 0, s2 = POW(s, 2), mid = FLOOR(s2/2);
+		
+		for(; i < s2; i++) {
+			this.txt.push(new TextBox(this, 50, 24, (mid==i?1:0), 5, true, -9999, 9999));
+			this.txt[i].onchange = function(o, n) {
+				this.parent.update(true);
+			};
+		}
+		
+		this.w = 130+(60*s);
+		this.h = 110+(40*s);
+		
+		this.children = [this.b_apply, this.b_cancel, this.name, this.amp, this.sum, this.cb, this.txt];	
+		
+		this.update();
+	},
+	update: function(calcSum) {
+		var s2 = POW(this.size, 2), ker = [], sum = 0, i = 0;
+		for(; i < s2; i++) {
+			ker[i] = (this.txt[i] ? this.txt[i].get() : 0);
+			sum += ker[i];
+		}
+		
+		// Recalculate sum?
+		if(calcSum) this.sum.value = sum;
+		else sum = this.sum.value;
+		
+		IMGFX.Kernel(ker, this.cb.active, sum);
+	},
+	def: function() {
+		this.update();
+	},
+	apply: function() {
+		
+		// Make sure name isn't blank
+		var name = this.name.get(true);
+		
+		if(name == "") name = "Custom";
+		
+		this.update();
+		IMGFX.AddHistory(name);
+	},
+	detect: function(x, y, type) {
+		
+		this._super(x, y, type);
+		
+		// Text boxes
+		for(var i = 0; i < this.txt.length; i++) {
+			this.txt[i].detect(x, y, type);
+		}
+		
+		// Name box
+		this.name.detect(x, y, type);
+		
+		// Sum divisor and alpha check box
+		if(this.cb.detect(x, y, type)) this.update();
+		this.sum.detect(x, y, type);
+	},
+	draw: function(ctx) {
+		ctx.save();
+		
+		// Position text boxes
+		for(var i = 0; i < this.txt.length; i++) {
+			this.txt[i].set(this.x+120+60*(i%this.size), this.y+40+40*FLOOR(i/this.size));
+		}
+		
+		// Position name box up top
+		this.name.set(this.x+(this.w/2)-(this.name.w/2), this.y+10);
+		
+		// Position sum upper right
+		this.sum.set(this.x+60, this.y+80);
+		
+		// Position alpha check box
+		this.cb.set(this.x+10, this.y+this.h-70);
+		
+		// Drawing begins here
+		this._super(ctx);
+		
+		// Draw sum text
+		ctx.font = "18px "+F1;
+		ctx.fillStyle = C1;
+		ctx.fillText("Sum:", this.sum.x-50, this.sum.y+18);
+	
+		ctx.restore();
+	}
+});
+
 /* Three.JS 3D Texture Preview */
 PBOX_View3D = PBOX_Base.extend({
 	init: function() {
 		this._super("Three.js 3D Texture Preview", 370, 450);
 		
+		// Initial position
+		this.x = 100;
+		this.y = 100;
+		
+		// Allow outside input for UV editing
+		this.outsideInput = true;
+		
 		// Moving the model with the mouse
 		this.down = false;	// Mouse down
 		this.held = [0, 0];	// Position where clicked
 		this.meshrot = [0, 0];	// Mesh rotation before clicking down
-		this.jsonTxt = null;
 		
 		// Remove default buttons
 		delete this.b_apply;
@@ -1284,7 +1502,6 @@ PBOX_View3D = PBOX_Base.extend({
 		this.b_clear = new Button("Clear UVs");
 		this.b_import = new Button("Import");
 		this.b_export = new Button("Export");
-		this.b_export.active = false;
 		
 		// Error label
 		this.error = new Label(180, 18, "");
@@ -1295,7 +1512,7 @@ PBOX_View3D = PBOX_Base.extend({
 		// Generic scene
 		this.scene = new THREE.Scene();
 		this.camera = new THREE.PerspectiveCamera(75, 1, 1, 10000);
-		this.camera.position.z = 330;
+		this.camera.position.z = 33;
 
 		var r = this.renderer = new THREE.WebGLRenderer(canvas), rd = r.domElement;
 		r.setSize(0, 0);
@@ -1328,7 +1545,7 @@ PBOX_View3D = PBOX_Base.extend({
 		// Create mesh if it doesn't exist, otherwise just update the map
 		if(!this.mesh) {
 			this.material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true });
-			this.mesh = new THREE.Mesh(new THREE.SphereGeometry(200, 16, 12), this.material);
+			this.mesh = new THREE.Mesh(new THREE.BufferGeometry().fromGeometry(new THREE.SphereGeometry(20, 16, 12)), this.material);
 			this.mesh.rotation.y = -1.5;	// Face toward camera
 			this.scene.add(this.mesh);
 		} else {
@@ -1344,24 +1561,72 @@ PBOX_View3D = PBOX_Base.extend({
 	},
 	
 	// Set the geometry based on JSON
-	setModel: function(jsontxt) {
-		if(!jsontxt || typeof(jsontxt) != "string") return;
-		var js = new THREE.JSONLoader(), result;
+	setModel: function(txt, name) {
+		if(!txt || typeof(txt) != "string") return;
 		
-		// Attempt to parse JSON text
+		var isOBJ = name.indexOf(".obj") > -1, loader = (isOBJ ? new THREE.OBJLoader() : new THREE.JSONLoader()), result;
+		
+		// Attempt to parse text
 		try {
-			result = js.parse(JSON.parse(jsontxt));
+			
+			// OBJ models
+			if(isOBJ) {
+				result = loader.parse(txt).children[0].geometry;
+				
+			// JSON Object or BufferGeometry
+			} else {
+				result = JSON.parse(txt);
+				if(result.metadata) {
+					if(result.metadata.type == "BufferGeometry")
+						loader = new THREE.BufferGeometryLoader();
+					else if(result.metadata.type == "Object")
+						loader = new THREE.ObjectLoader();
+				}
+				
+				// Try to parse JSON object to model
+				try {
+					result = loader.parse(result);
+				} catch(e) {
+					ERR(e);
+					result = null;
+				}
+			}
 		} catch(e) {
+			ERR(e);
 			result = null;
 		}
 		
 		// Valid model
 		if(result) {
 			UVMap.clearUVs();
-			this.mesh.geometry = result.geometry;
+			
+			// Convert Geometry to BufferGeometry
+			if(result.geometry && result.geometry.type == "Geometry")
+				result = new THREE.BufferGeometry().fromGeometry(result.geometry);
+			
+			// Update scene
+			this.scene.remove(this.mesh);
+			
+			// If a mesh was imported
+			if(result.type == "Mesh") {
+				result.material = this.material;
+				this.mesh = result;
+				this.update();
+				
+			// If geometry was imported
+			} else {
+				this.mesh = new THREE.Mesh(result, this.material);
+			}
+			
+			// Add new model
+			this.scene.add(this.mesh);			
+			
+			// Zoom camera to object
+			this.centerCamera();
+			
+			// Render new scene
 			this.renderer.render(this.scene, this.camera);
-			this.jsonTxt = jsontxt;
-			//this.b_export.active = true;
+			this.b_export.active = true;
 			this.error.value = "";
 		
 		// Let the user know there was a problem
@@ -1370,6 +1635,33 @@ PBOX_View3D = PBOX_Base.extend({
 		}
 		Update();
 	},	
+	
+	// Center and fit camera to model
+	centerCamera: function() {
+		if(this.mesh && this.mesh.geometry) {
+			var v = this.mesh.geometry.getAttribute('position').array,
+				min = [Infinity, Infinity, Infinity],
+				max = [-Infinity, -Infinity, -Infinity], 
+				i = 0, j = 0;
+				
+			// Find min and max vertex
+			for(; i < v.length; i++) {
+				if(v[i] > max[j]) max[j] = v[i];
+				else if(v[i] < min[j]) min[j] = v[i];
+				
+				j++;
+				if(j == 3) j = 0;
+			}
+			
+			// Set center
+			this.camera.position.x = (max[0]+min[0])/2;
+			this.camera.position.y = (max[1]+min[1])/2;
+			
+			// Set zoom distance
+			this.camera.position.z = SQRT(POW(max[0]-min[0], 2) + POW(max[1]-min[1], 2) + POW(max[2]-min[2], 2))/1.5;
+		}
+	},
+	
 	close: function(applied) {
 		D(this.renderer.domElement, false);
 		this.active = false;
@@ -1393,33 +1685,8 @@ PBOX_View3D = PBOX_Base.extend({
 			OpenDialog(1);
 		
 		// Export JSON model
-		} else if(this.b_export.detect(x, y, type)) {
-			if(!this.jsonTxt) return;
-			
-			// TODO: Fix UV export
-			
-			/*var buf = new THREE.BufferGeometry(), xport = E("export"), data = JSON.parse(this.jsonTxt), file;
-			
-			// Convert geometry to buffer
-			buf.fromGeometry(this.mesh.geometry);
-			
-			// Get UV float array and pass it to an empty array
-			var attrUV = buf.getAttribute('uv').array, uvs = [], i = 0;			
-			for(; i < attrUV.length; i++) {
-				uvs.push(attrUV[i]);
-			}
-			
-			data.uvs = uvs;
-			
-			file = new Blob([JSON.stringify(data)], {type: "application/javascript"});
-			
-			// Revoke export URL if there is one
-			if(xport.href.indexOf("blob:") == 0) URL.revokeObjectURL(xport.href);
-			
-			// Download on click
-			xport.href = URL.createObjectURL(file);
-			xport.download = "model.js";
-			xport.click();*/
+		} else if(this.b_export.detect(x, y, type)) {			
+			PBOX.Export3D.open();
 		}
 		
 		// Grab model
@@ -1439,11 +1706,12 @@ PBOX_View3D = PBOX_Base.extend({
 			r.render(this.scene, this.camera);
 			
 		// Mouse wheel zoom
+		// Default = 1 unit; Shift = 10 units; Ctrl = 0.1 units
 		} else if(type == "wheelup" && hover) {
-			this.camera.position.z -= 10;
+			this.camera.position.z -= (SHIFT?10:(CTRL?0.1:1));
 			r.render(this.scene, this.camera);
 		} else if(type == "wheeldown" && hover) {
-			this.camera.position.z += 10;
+			this.camera.position.z += (SHIFT?10:(CTRL?0.1:1));
 			r.render(this.scene, this.camera);
 		}
 	},
@@ -1491,26 +1759,151 @@ PBOX_View3D = PBOX_Base.extend({
 	}
 });
 
+/* Export model window */
+PBOX_Export3D = PBOX_Base.extend({
+	init: function() {
+		this._super("Export Model", 300, 160);
+		
+		// Save button
+		this.b_apply.setText("Save");
+		
+		// Export type
+		this.type = 0;
+		
+		// Image name text box
+		this.modelName = new TextBox(this, 280, 20, "model.js", 32);
+		
+		// File type boxes
+		this.rb = [new RadioButton(this, "Three.js Object"), new RadioButton(this, "BufferGeometry"), new RadioButton(this, "OBJ")];
+		
+		this.setChildren(this.modelName, this.rb);
+	},
+	def: function() {
+		this.rb[this.type].toggle(true);
+	},
+	apply: function() {
+		this.fixExtension();
+			
+		var v3d = PBOX.View3D, buf, xport = E("export"), file, name = this.modelName.get();
+		
+		// Conversion method
+		switch(this.type) {
+			
+			// Three.js Object
+			case 0: 
+				buf = JSON.stringify(v3d.mesh.toJSON());
+				break;
+				
+			// Three.js Buffer Geometry
+			case 1:
+				buf = JSON.stringify(PBOX.View3D.mesh.geometry);
+				break;
+			
+			// OBJ model (most versatile)
+			default:
+			
+				// Create new mesh converting BufferGeometry -> Geometry (OBJExporter only works with Geometry)
+				buf = new THREE.Mesh(new THREE.Geometry().fromBufferGeometry(v3d.mesh.geometry), v3d.material);
+				
+				// Set file name so the exporter reads it
+				buf.name = name.substring(0, name.lastIndexOf("."));
+				
+				// Convert Mesh to OBJ
+				buf = new THREE.OBJExporter().parse(buf);				
+				break;			
+		}
+		
+		// Create file that can be downloaded
+		file = new Blob([buf], {type: this.mimeType()});
+		
+		// Revoke export URL if there is one
+		if(xport.href.indexOf("blob:") == 0) URL.revokeObjectURL(xport.href);
+		
+		// Download on click
+		xport.href = URL.createObjectURL(file);
+		xport.download = name;
+		xport.click();
+	},
+	
+	// Set file name to proper extension
+	fixExtension: function() {
+		var name = this.modelName.get(), ext = name.lastIndexOf('.');
+		
+		// Fix up file extension
+		if(ext > -1) name = name.substring(0, ext);
+		this.modelName.value = name+'.'+this.getExtension();
+	},
+	
+	// Get extension suffix
+	getExtension: function() {
+		switch(this.type) {
+			case 0:
+			case 1: return "js";
+		}
+		return "obj";
+	},
+	
+	// Get mime type
+	mimeType: function() {
+		switch(this.type) {
+			case 0:
+			case 1: return "application/javascript";
+		}
+		return "text/plain";
+	},
+	
+	detect: function(x, y, type) {		
+		this._super(x, y, type);		
+		this.modelName.detect(x, y, type);
+		
+		// Radio buttons
+		if(type == "click") {
+			for(var i = 0; i < this.rb.length; i++) {
+				if(this.rb[i].detect(x, y, type)) {
+					this.type = i;
+				}
+			}
+			this.fixExtension();
+		}
+	},
+	draw: function(ctx) {
+		ctx.save();
+		
+		this.modelName.set(this.x+10, this.y+10);
+		
+		for(var i = 0; i < this.rb.length; i++) {
+			this.rb[i].set(this.x+10, (this.y+this.modelName.h+20)+(i*25));
+		}
+		
+		// Drawing begins here
+		this._super(ctx);
+	
+		ctx.restore();
+	}
+});
+
 /* Theme chooser */
 PBOX_ChooseTheme = PBOX_Base.extend({
 	init: function() {
 		this._super("Choose Theme", 250, 280, true);
 		
-		this.rb = [new RadioButton("Blue"), new RadioButton("Green"), new RadioButton("Red"), new RadioButton("Yellow"), new RadioButton("Cyan"),
-		new RadioButton("Pink"), new RadioButton("Orange"), new RadioButton("Lime"), new RadioButton("Gray"), new RadioButton("Deep Blue"),
-		new RadioButton("Deep Green"), new RadioButton("Deep Red"), new RadioButton("Deep Yellow"), new RadioButton("Deep Cyan"),
-		new RadioButton("Deep Pink"), new RadioButton("Dela"), new RadioButton("High Contrast"), new RadioButton("Black")];
+		this.rb = [new RadioButton(this, "Blue"), new RadioButton(this, "Green"), new RadioButton(this, "Red"), new RadioButton(this, "Yellow"), new RadioButton(this, "Cyan"),
+		new RadioButton(this, "Pink"), new RadioButton(this, "Orange"), new RadioButton(this, "Lime"), new RadioButton(this, "Gray"), new RadioButton(this, "Deep Blue"),
+		new RadioButton(this, "Deep Green"), new RadioButton(this, "Deep Red"), new RadioButton(this, "Deep Yellow"), new RadioButton(this, "Deep Cyan"),
+		new RadioButton(this, "Deep Pink"), new RadioButton(this, "Dela"), new RadioButton(this, "High Contrast"), new RadioButton(this, "Black")];
 		
-		// Radio button value
-		this.rb_val = 0;
+		// Theme value
+		this.value = 0;
+		
+		// Last theme
+		this.last = 0;
 		
 		this.setChildren(this.rb);
 	},
-	last: 0,
 	def: function() {
 		this.last = CurrentTheme;
-		this.rb_val = CurrentTheme;
-		this.rb[this.rb_val].toggle(true);
+		this.value = CurrentTheme;
+		this.rb[this.value].toggle(true);
 	},
 	apply: function() {
 		this.last = CurrentTheme;
@@ -1524,17 +1917,13 @@ PBOX_ChooseTheme = PBOX_Base.extend({
 			// Radio buttons
 			for(var i = 0; i < this.rb.length; i++) {
 				if(this.rb[i].detect(x, y, type)) {
-					this.rb_val = i;
+					this.value = i;
 					SetTheme(i);
 				}
-				this.rb[i].toggle(false);
 			}
-			
-			this.rb[this.rb_val].toggle(true);
 		}
 		
-		this._super(x, y, type);
-		
+		this._super(x, y, type);		
 	},
 	draw: function(ctx) {
 		ctx.save();
@@ -1560,7 +1949,6 @@ PBOX_ImageBrowser = PBOX_Base.extend({
 		this.b_cancel = this.b_apply = null;
 		this.b_next = new Button("Next");
 		this.b_prev = new Button("Previous");
-		this.rb = [new RadioButton("Difference", 1), new RadioButton("Size", 2), new RadioButton("", 3)];
 		
 		this.children = [this.b_next, this.b_prev];
 		
@@ -1571,7 +1959,7 @@ PBOX_ImageBrowser = PBOX_Base.extend({
 	},
 	open: function() {
 		if(this.images.length == 0) return;
-		this.super();
+		this._super();
 	},
 	def: function() {
 		this.page = 0;
@@ -1902,8 +2290,8 @@ PBOX_About = PBOX_Base.extend({
 		// Text
 		this.name = "Photoblob";
 		this.desc = "Image/Texture Editor and 3D Model Viewer";
-		this.version = "0.2";
-		this.update = "Updated 03/24/2015";
+		this.version = "0.2.1";
+		this.update = "Updated 5/7/2015";
 		this.site = "http://photo.blob.software/";
 		this.copy = "© 2015 Vincent Costanza";
 		
@@ -1980,30 +2368,15 @@ PBOX_About = PBOX_Base.extend({
 // PBOX container
 PBOX = {
 		
-	New: new PBOX_New(),
-	OpenLink: new PBOX_OpenLink(),
-	OpenSVG: new PBOX_OpenSVG(),
-	Save: new PBOX_Save(),
-	Resize: new PBOX_Resize(),
-	ColorBox: new PBOX_ColorBox(),
-	Grayscale: new PBOX_Grayscale(),
-	Mirror: new PBOX_Mirror(),
-	InvertColors: new PBOX_InvertColors(),
-	Brightness: new PBOX_Brightness(),
-	AddNoise: new PBOX_AddNoise(),
-	Posterize: new PBOX_Posterize(),
-	BoxBlur: new PBOX_BoxBlur(),
-	Shift: new PBOX_Shift(),
-	ChangeHSL: new PBOX_ChangeHSL(),
-	GradientMap: new PBOX_GradientMap(),
-	ReplaceColor: new PBOX_ReplaceColor(),
-	View3D: new PBOX_View3D(),
-	ChooseTheme: new PBOX_ChooseTheme(),
-	ImageBrowser: new PBOX_ImageBrowser(),
-	Hotkeys: new PBOX_Hotkeys(),
-	AddOn: new PBOX_AddOn(),
-	About: new PBOX_About(),
+	// Attach window to PBOX
+	attach: function(name) {
+		if(window["PBOX_"+name] == null)
+			ERR("Invalid PBOX window attached: "+name);
+		else
+			this[name] = new window["PBOX_"+name];
+	},
 	
+	// Hit detection on all windows
 	detect: function(x, y, type) {
 		
 		var t = undefined, opened = false;
@@ -2011,12 +2384,11 @@ PBOX = {
 			t = this[i];
 			if(typeof(t) == "object" && t.draw != undefined && t.active == true && t.closing == false) {
 			
-				// Exceptions to PBOX opened rule				
-				// Otherwise ignore all non-PBOX detects when opened
-				if(i != "View3D") opened = true;
+				// If opened is true, input made outside the window is ignored
+				opened = (WC(x, y, t.x, t.y-30, t.w, t.h+30) || !t.outsideInput);
 					
 				// Detect mouse on title bar
-				if(x-t.x >= 0 && x-t.x < t.w && t.y-y >= 0 && t.y-y <= 30) {
+				if(WC(x, y, t.x, t.y-30, t.w, 30)) {
 				
 					// Start window dragging
 					if(!t.isDragging && type == "down") {
@@ -2034,6 +2406,8 @@ PBOX = {
 				
 				// Currently dragging window
 				if(t.isDragging) {
+					
+					SC("move");
 				
 					// Move window with mouse
 					if(type == "move") {
@@ -2049,16 +2423,13 @@ PBOX = {
 				} else {				
 					// Detect within window
 					t.detect(x, y, type);
-					
-					if(i == "View3D" && WB(x, y, t)) {
-						opened = true;
-					}
 				}
 			}
 		}
 		return opened;
 	},
 	
+	// Draw all windows
 	draw: function(ctx) {
 		
 		// Draw all children objects
@@ -2114,3 +2485,32 @@ PBOX = {
 		}
 	}
 };
+
+// Attach all usable windows
+PBOX.attach("New");
+PBOX.attach("OpenLink");
+PBOX.attach("OpenSVG");
+PBOX.attach("Save");
+PBOX.attach("Resize");
+PBOX.attach("ColorBox");
+PBOX.attach("Grayscale");
+PBOX.attach("Mirror");
+PBOX.attach("InvertColors");
+PBOX.attach("Brightness");
+PBOX.attach("AddNoise");
+PBOX.attach("Posterize");
+PBOX.attach("MixHistory");
+PBOX.attach("BoxBlur");
+PBOX.attach("Sharpen");
+PBOX.attach("Shift");
+PBOX.attach("ChangeHSL");
+PBOX.attach("GradientMap");
+PBOX.attach("ReplaceColor");
+PBOX.attach("Kernel");
+PBOX.attach("View3D");
+PBOX.attach("Export3D");
+PBOX.attach("ChooseTheme");
+PBOX.attach("ImageBrowser");
+PBOX.attach("Hotkeys");
+PBOX.attach("AddOn");
+PBOX.attach("About");
